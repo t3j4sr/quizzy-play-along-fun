@@ -1,0 +1,221 @@
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { gameManager, type GameSession, type Player, type Quiz } from '@/lib/gameManager';
+import { realtimeManager } from '@/lib/realtimeManager';
+import { toast } from '@/hooks/use-toast';
+
+interface UseGameStateOptions {
+  pin?: string;
+  playerId?: string;
+  autoConnect?: boolean;
+}
+
+interface GameState {
+  game: GameSession | null;
+  quiz: Quiz | null;
+  currentPlayer: Player | null;
+  isConnected: boolean;
+  isLoading: boolean;
+  error: string | null;
+}
+
+export function useGameState(options: UseGameStateOptions = {}) {
+  const { pin, playerId, autoConnect = true } = options;
+  const [state, setState] = useState<GameState>({
+    game: null,
+    quiz: null,
+    currentPlayer: null,
+    isConnected: false,
+    isLoading: false,
+    error: null
+  });
+
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  // Connect to game
+  const connect = useCallback((gamePin: string) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      const game = gameManager.getGameByPin(gamePin);
+      if (!game) {
+        throw new Error('Game not found');
+      }
+
+      const quiz = gameManager.getQuiz(game.quizId);
+      if (!quiz) {
+        throw new Error('Quiz not found');
+      }
+
+      const currentPlayer = playerId 
+        ? game.players.find(p => p.id === playerId) || null
+        : null;
+
+      setState(prev => ({
+        ...prev,
+        game,
+        quiz,
+        currentPlayer,
+        isConnected: true,
+        isLoading: false
+      }));
+
+      // Subscribe to real-time updates
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+
+      unsubscribeRef.current = realtimeManager.subscribe(gamePin, (event) => {
+        setState(prev => {
+          if (!prev.game) return prev;
+
+          const updatedGame = { ...prev.game };
+
+          switch (event.type) {
+            case 'player_joined':
+              const existingPlayer = updatedGame.players.find(p => p.id === event.payload.id);
+              if (!existingPlayer) {
+                updatedGame.players.push(event.payload);
+                toast({ title: `${event.payload.name} joined the game!` });
+              }
+              break;
+
+            case 'player_left':
+              updatedGame.players = updatedGame.players.filter(p => p.id !== event.payload.playerId);
+              break;
+
+            case 'game_started':
+              updatedGame.status = 'playing';
+              updatedGame.startedAt = Date.now();
+              toast({ title: 'Game started!' });
+              break;
+
+            case 'question_started':
+              updatedGame.currentQuestionIndex = event.payload.questionIndex;
+              break;
+
+            case 'game_ended':
+              updatedGame.status = 'finished';
+              updatedGame.finishedAt = Date.now();
+              toast({ title: 'Game finished!' });
+              break;
+          }
+
+          return {
+            ...prev,
+            game: updatedGame,
+            currentPlayer: playerId 
+              ? updatedGame.players.find(p => p.id === playerId) || prev.currentPlayer
+              : prev.currentPlayer
+          };
+        });
+      });
+
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        isLoading: false
+      }));
+    }
+  }, [playerId]);
+
+  // Disconnect from game
+  const disconnect = useCallback(() => {
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
+    setState({
+      game: null,
+      quiz: null,
+      currentPlayer: null,
+      isConnected: false,
+      isLoading: false,
+      error: null
+    });
+  }, []);
+
+  // Join game as player
+  const joinGame = useCallback((gamePin: string, playerName: string) => {
+    const result = gameManager.addPlayerToGame(gamePin, playerName);
+    
+    if (result.success && result.player) {
+      realtimeManager.playerJoined(gamePin, result.player);
+      return result.player;
+    } else {
+      toast({ 
+        title: 'Failed to join game', 
+        description: result.error,
+        variant: 'destructive' 
+      });
+      return null;
+    }
+  }, []);
+
+  // Start game (host only)
+  const startGame = useCallback(() => {
+    if (!state.game) return false;
+
+    const success = gameManager.startGame(state.game.pin);
+    if (success) {
+      realtimeManager.gameStarted(state.game.pin);
+    }
+    return success;
+  }, [state.game]);
+
+  // Submit answer
+  const submitAnswer = useCallback((questionId: string, answerId: string, timeSpent: number) => {
+    if (!state.game || !state.currentPlayer) return false;
+
+    const success = gameManager.submitAnswer(
+      state.game.pin, 
+      state.currentPlayer.id, 
+      questionId, 
+      answerId, 
+      timeSpent
+    );
+
+    if (success) {
+      realtimeManager.answerSubmitted(state.game.pin, state.currentPlayer.id, answerId);
+    }
+
+    return success;
+  }, [state.game, state.currentPlayer]);
+
+  // Get leaderboard
+  const getLeaderboard = useCallback(() => {
+    if (!state.game) return [];
+    return gameManager.getLeaderboard(state.game.pin);
+  }, [state.game]);
+
+  // Auto-connect if pin provided
+  useEffect(() => {
+    if (pin && autoConnect && !state.isConnected && !state.isLoading) {
+      connect(pin);
+    }
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, [pin, autoConnect, connect, state.isConnected, state.isLoading]);
+
+  return {
+    ...state,
+    connect,
+    disconnect,
+    joinGame,
+    startGame,
+    submitAnswer,
+    getLeaderboard,
+    // Computed values
+    isHost: Boolean(state.game && !playerId),
+    canStart: Boolean(state.game && state.game.status === 'waiting' && state.game.players.length > 0),
+    currentQuestion: state.quiz?.questions[state.game?.currentQuestionIndex || 0] || null,
+    isGameActive: state.game?.status === 'playing',
+    isGameFinished: state.game?.status === 'finished'
+  };
+}
