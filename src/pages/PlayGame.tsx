@@ -6,64 +6,45 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Trophy, Zap } from 'lucide-react';
-
-interface Question {
-  id: string;
-  question: string;
-  answers: { id: string; text: string; isCorrect: boolean }[];
-  timeLimit: number;
-}
-
-const demoQuestions: Question[] = [
-  {
-    id: '1',
-    question: 'What is the capital of France?',
-    answers: [
-      { id: '1', text: 'London', isCorrect: false },
-      { id: '2', text: 'Berlin', isCorrect: false },
-      { id: '3', text: 'Paris', isCorrect: true },
-      { id: '4', text: 'Madrid', isCorrect: false }
-    ],
-    timeLimit: 20
-  },
-  {
-    id: '2',
-    question: 'Which planet is known as the Red Planet?',
-    answers: [
-      { id: '1', text: 'Venus', isCorrect: false },
-      { id: '2', text: 'Mars', isCorrect: true },
-      { id: '3', text: 'Jupiter', isCorrect: false },
-      { id: '4', text: 'Saturn', isCorrect: false }
-    ],
-    timeLimit: 15
-  },
-  {
-    id: '3',
-    question: 'What is 2 + 2?',
-    answers: [
-      { id: '1', text: '3', isCorrect: false },
-      { id: '2', text: '4', isCorrect: true },
-      { id: '3', text: '5', isCorrect: false },
-      { id: '4', text: '6', isCorrect: false }
-    ],
-    timeLimit: 10
-  }
-];
+import { useGameState } from '@/hooks/useGameState';
 
 const PlayGame = () => {
   const { quizId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const playerName = searchParams.get('player') || 'Player';
+  const pin = searchParams.get('pin');
+  const playerId = searchParams.get('playerId');
+  const isHost = searchParams.get('host') === 'true';
   
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(20);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [score, setScore] = useState(0);
-  const [gamePhase, setGamePhase] = useState<'question' | 'result' | 'leaderboard' | 'final'>('question');
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [gamePhase, setGamePhase] = useState('question');
   const [isAnswered, setIsAnswered] = useState(false);
+  const [pointsEarned, setPointsEarned] = useState(0);
 
-  const currentQuestion = demoQuestions[currentQuestionIndex];
+  const { 
+    game, 
+    quiz, 
+    currentPlayer, 
+    currentQuestion, 
+    submitAnswer, 
+    getLeaderboard,
+    isGameActive,
+    isGameFinished 
+  } = useGameState({ 
+    pin: pin || undefined,
+    playerId: playerId || undefined 
+  });
+
+  useEffect(() => {
+    if (!game || !currentQuestion) return;
+
+    setTimeLeft(currentQuestion.timeLimit);
+    setSelectedAnswer(null);
+    setIsAnswered(false);
+    setGamePhase('question');
+    setPointsEarned(0);
+  }, [game?.currentQuestionIndex, currentQuestion]);
 
   useEffect(() => {
     if (gamePhase === 'question' && timeLeft > 0 && !isAnswered) {
@@ -74,28 +55,30 @@ const PlayGame = () => {
     }
   }, [timeLeft, gamePhase, isAnswered]);
 
-  const handleAnswerSubmit = (answerId: string | null) => {
-    if (isAnswered) return;
+  const handleAnswerSubmit = (answerId) => {
+    if (isAnswered || !currentQuestion || !currentPlayer) return;
     
     setSelectedAnswer(answerId);
     setIsAnswered(true);
     
-    if (answerId && currentQuestion.answers.find(a => a.id === answerId)?.isCorrect) {
-      const points = Math.max(100, Math.floor((timeLeft / currentQuestion.timeLimit) * 1000));
-      setScore(prev => prev + points);
+    const timeSpent = currentQuestion.timeLimit - timeLeft;
+    const success = submitAnswer(currentQuestion.id, answerId || '', timeSpent);
+    
+    if (success && answerId && currentQuestion.answers.find(a => a.id === answerId)?.isCorrect) {
+      // Calculate points like Kahoot: base points + speed bonus
+      const basePoints = Math.floor((currentQuestion.points || 1000) * 0.5);
+      const timeBonus = Math.floor(basePoints * (timeLeft / currentQuestion.timeLimit));
+      const totalPoints = basePoints + timeBonus;
+      setPointsEarned(totalPoints);
     }
 
     setGamePhase('result');
     
     setTimeout(() => {
-      if (currentQuestionIndex < demoQuestions.length - 1) {
+      if (game && game.currentQuestionIndex < (quiz?.questions.length || 0) - 1) {
         setGamePhase('leaderboard');
         setTimeout(() => {
-          setCurrentQuestionIndex(prev => prev + 1);
-          setTimeLeft(demoQuestions[currentQuestionIndex + 1]?.timeLimit || 20);
-          setSelectedAnswer(null);
-          setIsAnswered(false);
-          setGamePhase('question');
+          // Wait for next question from host
         }, 3000);
       } else {
         setGamePhase('final');
@@ -103,7 +86,7 @@ const PlayGame = () => {
     }, 3000);
   };
 
-  const getAnswerStyle = (answer: any) => {
+  const getAnswerStyle = (answer) => {
     if (!isAnswered) {
       return selectedAnswer === answer.id 
         ? "bg-blue-500 text-white scale-105 shadow-lg" 
@@ -121,17 +104,27 @@ const PlayGame = () => {
     return "bg-gray-200 text-gray-500";
   };
 
-  if (gamePhase === 'final') {
+  if (!game || !quiz || !currentQuestion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center">
+        <div className="text-white text-xl">Loading game...</div>
+      </div>
+    );
+  }
+
+  if (isGameFinished || gamePhase === 'final') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center px-4">
         <Card className="w-full max-w-2xl bg-white/95 backdrop-blur-sm shadow-2xl">
           <CardContent className="text-center py-12">
             <Trophy className="h-24 w-24 text-yellow-500 mx-auto mb-6" />
             <h1 className="text-4xl font-bold text-gray-800 mb-4">Game Complete!</h1>
-            <p className="text-xl text-gray-600 mb-6">Well done, {playerName}!</p>
+            <p className="text-xl text-gray-600 mb-6">
+              Well done, {currentPlayer?.name || 'Player'}!
+            </p>
             <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg p-6 mb-6">
               <p className="text-lg mb-2">Final Score</p>
-              <p className="text-5xl font-bold">{score.toLocaleString()}</p>
+              <p className="text-5xl font-bold">{(currentPlayer?.score || 0).toLocaleString()}</p>
             </div>
             <Button 
               onClick={() => navigate('/')}
@@ -146,33 +139,43 @@ const PlayGame = () => {
   }
 
   if (gamePhase === 'leaderboard') {
+    const leaderboard = getLeaderboard();
+    const playerRank = leaderboard.findIndex(p => p.id === currentPlayer?.id) + 1;
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-500 via-blue-500 to-purple-600 flex items-center justify-center px-4">
         <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl">
           <CardContent className="text-center py-12">
             <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Leaderboard</h2>
-            <div className="space-y-3">
-              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">1. {playerName}</span>
-                  <span className="font-bold">{score.toLocaleString()}</span>
+            <div className="space-y-3 mb-6">
+              {leaderboard.slice(0, 5).map((player, index) => (
+                <div
+                  key={player.id}
+                  className={`rounded-lg p-4 ${
+                    player.id === currentPlayer?.id
+                      ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white'
+                      : index === 0
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                      : 'bg-gray-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold">
+                      {index + 1}. {player.name}
+                      {player.id === currentPlayer?.id && ' (You)'}
+                    </span>
+                    <span className="font-bold">{player.score.toLocaleString()}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="bg-gray-200 rounded-lg p-3">
-                <div className="flex justify-between items-center text-gray-700">
-                  <span>2. Alice</span>
-                  <span>{(score - 150).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="bg-gray-100 rounded-lg p-3">
-                <div className="flex justify-between items-center text-gray-600">
-                  <span>3. Bob</span>
-                  <span>{(score - 300).toLocaleString()}</span>
-                </div>
-              </div>
+              ))}
             </div>
-            <p className="text-sm text-gray-500 mt-4">Next question loading...</p>
+            {playerRank > 5 && (
+              <div className="bg-blue-100 rounded-lg p-3 mb-4">
+                <p className="text-blue-800">Your rank: #{playerRank}</p>
+              </div>
+            )}
+            <p className="text-sm text-gray-500">Next question loading...</p>
           </CardContent>
         </Card>
       </div>
@@ -206,13 +209,15 @@ const PlayGame = () => {
                 The correct answer was: <strong>{correctAnswer?.text}</strong>
               </p>
             )}
-            {isCorrect && (
+            {isCorrect && pointsEarned > 0 && (
               <p className="text-xl text-gray-600 mb-4">
-                +{Math.max(100, Math.floor((timeLeft / currentQuestion.timeLimit) * 1000))} points!
+                +{pointsEarned.toLocaleString()} points!
               </p>
             )}
             <div className="bg-gray-100 rounded-lg p-4">
-              <p className="text-lg text-gray-700">Your Score: <strong>{score.toLocaleString()}</strong></p>
+              <p className="text-lg text-gray-700">
+                Your Score: <strong>{(currentPlayer?.score || 0).toLocaleString()}</strong>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -227,12 +232,12 @@ const PlayGame = () => {
         <div className="flex justify-between items-center mb-6 text-white">
           <div>
             <Badge variant="secondary" className="bg-white/20 text-white border-none">
-              Question {currentQuestionIndex + 1} of {demoQuestions.length}
+              Question {(game.currentQuestionIndex || 0) + 1} of {quiz.questions.length}
             </Badge>
           </div>
           <div className="text-center">
-            <p className="text-lg font-semibold">{playerName}</p>
-            <p className="text-sm opacity-75">Score: {score.toLocaleString()}</p>
+            <p className="text-lg font-semibold">{currentPlayer?.name || 'Player'}</p>
+            <p className="text-sm opacity-75">Score: {(currentPlayer?.score || 0).toLocaleString()}</p>
           </div>
           <div className="text-right">
             <div className="flex items-center gap-2">

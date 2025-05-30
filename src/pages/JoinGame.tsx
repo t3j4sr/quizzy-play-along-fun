@@ -6,39 +6,68 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { User, Users, Clock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useGameState } from '@/hooks/useGameState';
 
 const JoinGame = () => {
   const { pin } = useParams();
   const navigate = useNavigate();
   const [playerName, setPlayerName] = useState('');
-  const [isJoined, setIsJoined] = useState(false);
-  const [waitingPlayers, setWaitingPlayers] = useState(3);
+  const [currentPlayer, setCurrentPlayer] = useState(null);
+  
+  const { game, connect, joinGame, isConnected, error } = useGameState({ 
+    pin,
+    playerId: currentPlayer?.id,
+    autoConnect: true 
+  });
 
   useEffect(() => {
-    // Simulate other players joining
-    const interval = setInterval(() => {
-      setWaitingPlayers(prev => prev + Math.floor(Math.random() * 2));
-    }, 3000);
+    if (error) {
+      toast({ title: error, variant: "destructive" });
+    }
+  }, [error]);
 
-    return () => clearInterval(interval);
-  }, []);
+  // Auto-redirect when game starts
+  useEffect(() => {
+    if (game && game.status === 'playing' && currentPlayer) {
+      navigate(`/play/game?pin=${pin}&playerId=${currentPlayer.id}`);
+    }
+  }, [game, currentPlayer, navigate, pin]);
 
-  const joinGame = () => {
+  const handleJoinGame = () => {
     if (!playerName.trim()) {
       toast({ title: "Please enter your name", variant: "destructive" });
       return;
     }
 
-    setIsJoined(true);
-    toast({ title: `Welcome ${playerName}! Waiting for game to start...` });
+    if (!pin) {
+      toast({ title: "Invalid game PIN", variant: "destructive" });
+      return;
+    }
+
+    const player = joinGame(pin, playerName.trim());
+    if (player) {
+      setCurrentPlayer(player);
+    }
   };
 
-  const startDemo = () => {
-    // For demo purposes, navigate to play page
-    navigate(`/play/demo?pin=${pin}&player=${encodeURIComponent(playerName)}`);
-  };
+  if (!isConnected && !error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl">
+          <CardContent className="text-center py-12">
+            <div className="animate-pulse flex space-x-1 justify-center mb-4">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-75"></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-150"></div>
+            </div>
+            <p className="text-gray-600">Connecting to game...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  if (isJoined) {
+  if (currentPlayer && game) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-500 via-blue-500 to-purple-600 flex items-center justify-center">
         <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl">
@@ -50,7 +79,7 @@ const JoinGame = () => {
           </CardHeader>
           <CardContent className="text-center space-y-6">
             <div>
-              <p className="text-lg font-semibold text-gray-700">Welcome, {playerName}!</p>
+              <p className="text-lg font-semibold text-gray-700">Welcome, {currentPlayer.name}!</p>
               <p className="text-gray-600">Game PIN: {pin}</p>
             </div>
             
@@ -59,7 +88,7 @@ const JoinGame = () => {
                 <Clock className="h-5 w-5 text-gray-500" />
                 <span className="text-gray-700">Waiting for host to start...</span>
               </div>
-              <p className="text-sm text-gray-500">{waitingPlayers} players joined</p>
+              <p className="text-sm text-gray-500">{game.players.length} players joined</p>
             </div>
 
             <div className="space-y-3">
@@ -71,12 +100,7 @@ const JoinGame = () => {
                 </div>
               </div>
               
-              <Button 
-                onClick={startDemo}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-              >
-                Start Demo Game
-              </Button>
+              <p className="text-sm text-gray-500">The game will start automatically when the host begins</p>
             </div>
           </CardContent>
         </Card>
@@ -103,22 +127,25 @@ const JoinGame = () => {
               onChange={(e) => setPlayerName(e.target.value)}
               className="text-center text-xl h-12 border-2 border-gray-200 focus:border-blue-500"
               maxLength={20}
+              onKeyPress={(e) => e.key === 'Enter' && handleJoinGame()}
             />
           </div>
           
           <Button 
-            onClick={joinGame}
+            onClick={handleJoinGame}
             className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
             disabled={!playerName.trim()}
           >
             Join Game
           </Button>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-500">
-              {waitingPlayers} players have joined this game
-            </p>
-          </div>
+          {game && (
+            <div className="text-center">
+              <p className="text-sm text-gray-500">
+                {game.players.length} players have joined this game
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

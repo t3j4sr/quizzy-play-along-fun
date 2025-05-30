@@ -25,6 +25,7 @@ const App = () => (
           <Route path="/host/:quizId" element={<HostGame />} />
           <Route path="/game/:pin" element={<JoinGame />} />
           <Route path="/play/:quizId" element={<PlayGame />} />
+          <Route path="/play/game" element={<PlayGame />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

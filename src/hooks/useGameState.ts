@@ -60,56 +60,25 @@ export function useGameState(options: UseGameStateOptions = {}) {
         isLoading: false
       }));
 
-      // Subscribe to real-time updates
+      // Subscribe to real-time updates using localStorage polling
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
 
-      unsubscribeRef.current = realtimeManager.subscribe(gamePin, (event) => {
-        setState(prev => {
-          if (!prev.game) return prev;
-
-          const updatedGame = { ...prev.game };
-
-          switch (event.type) {
-            case 'player_joined':
-              const existingPlayer = updatedGame.players.find(p => p.id === event.payload.id);
-              if (!existingPlayer) {
-                updatedGame.players.push(event.payload);
-                toast({ title: `${event.payload.name} joined the game!` });
-              }
-              break;
-
-            case 'player_left':
-              updatedGame.players = updatedGame.players.filter(p => p.id !== event.payload.playerId);
-              break;
-
-            case 'game_started':
-              updatedGame.status = 'playing';
-              updatedGame.startedAt = Date.now();
-              toast({ title: 'Game started!' });
-              break;
-
-            case 'question_started':
-              updatedGame.currentQuestionIndex = event.payload.questionIndex;
-              break;
-
-            case 'game_ended':
-              updatedGame.status = 'finished';
-              updatedGame.finishedAt = Date.now();
-              toast({ title: 'Game finished!' });
-              break;
-          }
-
-          return {
+      const pollInterval = setInterval(() => {
+        const updatedGame = gameManager.getGameByPin(gamePin);
+        if (updatedGame) {
+          setState(prev => ({
             ...prev,
             game: updatedGame,
             currentPlayer: playerId 
               ? updatedGame.players.find(p => p.id === playerId) || prev.currentPlayer
               : prev.currentPlayer
-          };
-        });
-      });
+          }));
+        }
+      }, 1000);
+
+      unsubscribeRef.current = () => clearInterval(pollInterval);
 
     } catch (error) {
       setState(prev => ({
@@ -142,7 +111,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
     const result = gameManager.addPlayerToGame(gamePin, playerName);
     
     if (result.success && result.player) {
-      realtimeManager.playerJoined(gamePin, result.player);
+      toast({ title: `Welcome ${playerName}! You've joined the game.` });
       return result.player;
     } else {
       toast({ 
@@ -160,7 +129,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
 
     const success = gameManager.startGame(state.game.pin);
     if (success) {
-      realtimeManager.gameStarted(state.game.pin);
+      toast({ title: 'Game started!' });
     }
     return success;
   }, [state.game]);
@@ -176,10 +145,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
       answerId, 
       timeSpent
     );
-
-    if (success) {
-      realtimeManager.answerSubmitted(state.game.pin, state.currentPlayer.id, answerId);
-    }
 
     return success;
   }, [state.game, state.currentPlayer]);

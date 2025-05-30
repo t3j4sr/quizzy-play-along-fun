@@ -1,4 +1,3 @@
-
 export interface Player {
   id: string;
   name: string;
@@ -81,11 +80,23 @@ class GameManager {
     };
 
     this.games.set(gameSession.pin, gameSession);
+    this.saveGameToStorage(gameSession);
     return gameSession;
   }
 
   getGameByPin(pin: string): GameSession | null {
-    return this.games.get(pin) || null;
+    // Try from memory first
+    let game = this.games.get(pin);
+    
+    // If not in memory, try to load from localStorage
+    if (!game) {
+      game = this.loadGameFromStorage(pin);
+      if (game) {
+        this.games.set(pin, game);
+      }
+    }
+    
+    return game || null;
   }
 
   // Player Management
@@ -113,6 +124,7 @@ class GameManager {
     };
 
     game.players.push(player);
+    this.saveGameToStorage(game);
     return { success: true, player };
   }
 
@@ -125,6 +137,7 @@ class GameManager {
 
     game.status = 'playing';
     game.startedAt = Date.now();
+    this.saveGameToStorage(game);
     return true;
   }
 
@@ -143,14 +156,23 @@ class GameManager {
       return false;
     }
 
+    // Check if player already answered this question
+    if (player.answers.some(a => a.questionId === questionId)) {
+      return false;
+    }
+
     const answer = question.answers.find(a => a.id === answerId);
     const isCorrect = answer?.isCorrect || false;
 
-    // Calculate points based on time and correctness
+    // Calculate points based on time and correctness (like Kahoot)
     let points = 0;
     if (isCorrect) {
-      const timeBonus = Math.max(0, (question.timeLimit - timeSpent) / question.timeLimit);
-      points = Math.floor((question.points || 1000) * (0.5 + 0.5 * timeBonus));
+      // Base points for correct answer
+      const basePoints = question.points || 1000;
+      // Time bonus: faster answers get more points
+      const timeRatio = Math.max(0, (question.timeLimit - timeSpent) / question.timeLimit);
+      const timeBonus = Math.floor(basePoints * 0.5 * timeRatio); // Up to 50% bonus for speed
+      points = Math.floor(basePoints * 0.5) + timeBonus; // 50% base + up to 50% time bonus
     }
 
     player.answers.push({
@@ -161,6 +183,7 @@ class GameManager {
     });
 
     player.score += points;
+    this.saveGameToStorage(game);
     return true;
   }
 
@@ -179,6 +202,7 @@ class GameManager {
       game.finishedAt = Date.now();
     }
 
+    this.saveGameToStorage(game);
     return true;
   }
 
@@ -189,6 +213,34 @@ class GameManager {
     }
 
     return [...game.players].sort((a, b) => b.score - a.score);
+  }
+
+  // Storage methods for persistence
+  private saveGameToStorage(game: GameSession): void {
+    try {
+      localStorage.setItem(`game_${game.pin}`, JSON.stringify(game));
+      // Also save to a games list
+      const gamesList = this.loadFromStorage('games_list') || [];
+      const existingIndex = gamesList.findIndex((g: any) => g.pin === game.pin);
+      if (existingIndex >= 0) {
+        gamesList[existingIndex] = { pin: game.pin, createdAt: game.createdAt };
+      } else {
+        gamesList.push({ pin: game.pin, createdAt: game.createdAt });
+      }
+      this.saveToStorage('games_list', gamesList);
+    } catch (error) {
+      console.warn('Failed to save game to localStorage:', error);
+    }
+  }
+
+  private loadGameFromStorage(pin: string): GameSession | null {
+    try {
+      const data = localStorage.getItem(`game_${pin}`);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.warn('Failed to load game from localStorage:', error);
+      return null;
+    }
   }
 
   // Analytics
@@ -270,6 +322,15 @@ class GameManager {
         this.quizzes.set(quiz.id, quiz);
       });
     }
+
+    // Load active games
+    const gamesList = this.loadFromStorage('games_list') || [];
+    gamesList.forEach((gameInfo: any) => {
+      const game = this.loadGameFromStorage(gameInfo.pin);
+      if (game) {
+        this.games.set(game.pin, game);
+      }
+    });
   }
 }
 
