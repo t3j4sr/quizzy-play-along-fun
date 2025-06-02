@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gameManager, type GameSession, type Player, type Quiz } from '@/lib/gameManager';
 import { realtimeManager } from '@/lib/realtimeManager';
@@ -32,7 +31,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Connect to game
+  // Connect to game with real-time updates
   const connect = useCallback((gamePin: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
@@ -60,12 +59,15 @@ export function useGameState(options: UseGameStateOptions = {}) {
         isLoading: false
       }));
 
-      // Subscribe to real-time updates using localStorage polling
+      // Subscribe to real-time updates
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
 
-      const pollInterval = setInterval(() => {
+      const unsubscribe = realtimeManager.subscribe(gamePin, (event) => {
+        console.log('Real-time event received:', event);
+        
+        // Refresh game state from storage
         const updatedGame = gameManager.getGameByPin(gamePin);
         if (updatedGame) {
           setState(prev => ({
@@ -75,10 +77,25 @@ export function useGameState(options: UseGameStateOptions = {}) {
               ? updatedGame.players.find(p => p.id === playerId) || prev.currentPlayer
               : prev.currentPlayer
           }));
-        }
-      }, 1000);
 
-      unsubscribeRef.current = () => clearInterval(pollInterval);
+          // Show toast notifications for events
+          switch (event.type) {
+            case 'player_joined':
+              if (event.payload.id !== playerId) {
+                toast({ title: `${event.payload.name} joined the game!` });
+              }
+              break;
+            case 'game_started':
+              toast({ title: 'Game is starting!' });
+              break;
+            case 'question_started':
+              toast({ title: `Question ${event.payload.questionIndex + 1} started!` });
+              break;
+          }
+        }
+      });
+
+      unsubscribeRef.current = unsubscribe;
 
     } catch (error) {
       setState(prev => ({

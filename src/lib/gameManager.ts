@@ -1,3 +1,5 @@
+import { realtimeManager } from './realtimeManager';
+
 export interface Player {
   id: string;
   name: string;
@@ -125,6 +127,10 @@ class GameManager {
 
     game.players.push(player);
     this.saveGameToStorage(game);
+    
+    // Emit real-time event
+    realtimeManager.playerJoined(pin, { id: player.id, name: player.name });
+    
     return { success: true, player };
   }
 
@@ -138,6 +144,10 @@ class GameManager {
     game.status = 'playing';
     game.startedAt = Date.now();
     this.saveGameToStorage(game);
+    
+    // Emit real-time event
+    realtimeManager.gameStarted(pin);
+    
     return true;
   }
 
@@ -184,6 +194,10 @@ class GameManager {
 
     player.score += points;
     this.saveGameToStorage(game);
+    
+    // Emit real-time event
+    realtimeManager.answerSubmitted(pin, playerId, answerId);
+    
     return true;
   }
 
@@ -200,6 +214,14 @@ class GameManager {
     if (game.currentQuestionIndex >= quiz.questions.length) {
       game.status = 'finished';
       game.finishedAt = Date.now();
+      
+      // Emit game ended event
+      const finalScores = this.getLeaderboard(pin);
+      realtimeManager.gameEnded(pin, finalScores);
+    } else {
+      // Emit new question event
+      const currentQuestion = quiz.questions[game.currentQuestionIndex];
+      realtimeManager.questionStarted(pin, game.currentQuestionIndex, currentQuestion.timeLimit);
     }
 
     this.saveGameToStorage(game);

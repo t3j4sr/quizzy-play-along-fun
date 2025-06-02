@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, Play, BarChart3, Trophy, Settings } from 'lucide-react';
+import { Users, Play, BarChart3, Trophy, Settings, Zap, Crown, Sparkles } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { gameManager } from '@/lib/gameManager';
 import { useGameState } from '@/hooks/useGameState';
@@ -76,8 +76,13 @@ const HostGame = () => {
 
   if (!quiz || !game) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-        <div className="text-white text-xl">Setting up game...</div>
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center">
+        <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-8">
+          <div className="flex items-center space-x-4">
+            <div className="w-8 h-8 border-4 border-white/30 rounded-full animate-spin border-t-white"></div>
+            <div className="text-white text-xl font-semibold">Setting up your quiz room...</div>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -85,29 +90,40 @@ const HostGame = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-white mb-4">{quiz.title}</h1>
-          <p className="text-xl text-white/90 mb-6">{quiz.description}</p>
-          <div className="inline-block bg-white/20 backdrop-blur-sm rounded-2xl p-6">
-            <p className="text-white/80 text-lg mb-2">Game PIN</p>
-            <p className="text-6xl font-bold text-white tracking-wider">{game.pin}</p>
+        {/* Enhanced Header */}
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="mb-6">
+            <Crown className="w-16 h-16 text-yellow-300 mx-auto mb-4 animate-pulse" />
+            <h1 className="text-6xl font-bold text-white mb-4 bg-gradient-to-r from-white to-yellow-200 bg-clip-text text-transparent">
+              {quiz.title}
+            </h1>
+            <p className="text-xl text-white/90 mb-6">{quiz.description}</p>
+          </div>
+          
+          <div className="inline-block bg-white/20 backdrop-blur-xl rounded-3xl p-8 border border-white/30 shadow-2xl">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <Sparkles className="w-6 h-6 text-yellow-300" />
+              <p className="text-white/80 text-lg font-medium">Game PIN</p>
+              <Sparkles className="w-6 h-6 text-yellow-300" />
+            </div>
+            <p className="text-7xl font-bold text-white tracking-wider drop-shadow-lg">{game.pin}</p>
+            <p className="text-white/60 text-sm mt-2">Share this PIN with your students</p>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Game Settings & Info */}
-          <div className="lg:col-span-1">
-            <Card className="bg-white/95 backdrop-blur-sm shadow-xl mb-6">
+          {/* Enhanced Game Settings */}
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 shadow-xl animate-scale-in">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Points Settings
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Settings className="h-5 w-5 text-blue-300" />
+                  Quiz Settings
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="points">Points per Question</Label>
+                  <Label htmlFor="points" className="text-white/80">Points per Question</Label>
                   <Input
                     id="points"
                     type="number"
@@ -116,89 +132,118 @@ const HostGame = () => {
                     min="100"
                     max="5000"
                     step="100"
+                    className="bg-white/10 border-white/30 text-white"
                   />
-                  <p className="text-sm text-gray-500 mt-1">
-                    Faster answers get bonus points (like Kahoot!)
+                  <p className="text-sm text-white/60 mt-1 flex items-center gap-1">
+                    <Zap className="w-4 h-4" />
+                    Faster answers get bonus points!
                   </p>
                 </div>
-                <Button onClick={updateQuestionPoints} variant="outline" className="w-full">
+                <Button 
+                  onClick={updateQuestionPoints} 
+                  variant="outline" 
+                  className="w-full bg-white/10 border-white/30 text-white hover:bg-white/20"
+                >
                   Update All Questions
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="bg-white/95 backdrop-blur-sm shadow-xl mb-6">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 shadow-xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <BarChart3 className="h-5 w-5 text-green-300" />
                   Game Stats
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Questions:</span>
-                  <Badge variant="secondary">{quiz.questions.length}</Badge>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/10 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-white">{quiz.questions.length}</div>
+                    <div className="text-white/60 text-sm">Questions</div>
+                  </div>
+                  <div className="bg-white/10 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-green-300">{game.players.length}</div>
+                    <div className="text-white/60 text-sm">Players</div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Players:</span>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">
-                    {game.players.length}
-                  </Badge>
+                
+                <div className="bg-white/10 rounded-lg p-3 text-center">
+                  <div className="text-xl font-bold text-yellow-300">{quiz.questions[0]?.points || 1000}</div>
+                  <div className="text-white/60 text-sm">Points per Question</div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Points/Question:</span>
-                  <Badge variant="secondary">{quiz.questions[0]?.points || 1000}</Badge>
-                </div>
-                <div className="pt-4">
-                  <Button
-                    onClick={startGame}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white"
-                    disabled={game.players.length === 0}
-                  >
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Game
-                  </Button>
-                </div>
+                
+                <Button
+                  onClick={startGame}
+                  className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold shadow-lg"
+                  disabled={game.players.length === 0}
+                >
+                  <Play className="h-5 w-5 mr-2" />
+                  Start Game ({game.players.length} players)
+                </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Players List */}
+          {/* Enhanced Players List */}
           <div className="lg:col-span-2">
-            <Card className="bg-white/95 backdrop-blur-sm shadow-xl">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 shadow-xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Users className="h-5 w-5 text-blue-300" />
                   Players Joined ({game.players.length})
+                  {game.players.length > 0 && (
+                    <Badge className="bg-green-500 text-white ml-2 animate-pulse">
+                      LIVE
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {game.players.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">Waiting for players to join...</p>
-                    <p className="text-gray-400 text-sm mt-2">
-                      Players can join by entering the game PIN: <strong>{game.pin}</strong>
+                  <div className="text-center py-16">
+                    <div className="relative mb-6">
+                      <Users className="h-20 w-20 text-white/30 mx-auto" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-24 h-24 border-2 border-white/20 rounded-full animate-ping"></div>
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-3">Waiting for Students</h3>
+                    <p className="text-white/70 text-lg mb-4">
+                      Students can join by entering PIN: <span className="font-bold text-yellow-300 text-2xl">{game.pin}</span>
                     </p>
+                    <div className="flex justify-center">
+                      <div className="flex space-x-2">
+                        <div className="w-3 h-3 bg-white/60 rounded-full animate-bounce"></div>
+                        <div className="w-3 h-3 bg-white/60 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                        <div className="w-3 h-3 bg-white/60 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {game.players.map((player, index) => (
                       <div
                         key={player.id}
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-4 text-white animate-scale-in"
+                        className="bg-gradient-to-r from-blue-500/80 to-purple-600/80 backdrop-blur-sm rounded-xl p-4 text-white border border-white/20 shadow-lg animate-scale-in hover:scale-105 transition-transform"
                         style={{ animationDelay: `${index * 100}ms` }}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">{player.name}</h3>
-                            <p className="text-white/80 text-sm">
-                              Joined {new Date(player.joinedAt).toLocaleTimeString()}
-                            </p>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                              <span className="font-bold text-lg">{player.name.charAt(0).toUpperCase()}</span>
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-lg">{player.name}</h3>
+                              <p className="text-white/70 text-sm">
+                                {new Date(player.joinedAt).toLocaleTimeString()}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <Trophy className="h-6 w-6 text-yellow-300" />
-                          </div>
+                          <Trophy className="h-6 w-6 text-yellow-300" />
+                        </div>
+                        <div className="bg-white/10 rounded-lg p-2 text-center">
+                          <span className="text-sm text-white/80">Ready to play!</span>
                         </div>
                       </div>
                     ))}
@@ -207,18 +252,34 @@ const HostGame = () => {
               </CardContent>
             </Card>
 
-            {/* Instructions */}
-            <Card className="bg-white/95 backdrop-blur-sm shadow-xl mt-6">
+            {/* Enhanced Instructions */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 shadow-xl mt-6">
               <CardHeader>
-                <CardTitle>How Players Join</CardTitle>
+                <CardTitle className="text-white">How Students Join</CardTitle>
               </CardHeader>
               <CardContent>
-                <ol className="list-decimal list-inside space-y-2 text-gray-700">
-                  <li>Players go to your deployed QuizMaster URL</li>
-                  <li>Enter the game PIN: <strong className="text-2xl text-purple-600">{game.pin}</strong></li>
-                  <li>Click "Join Game" and enter their name</li>
-                  <li>Wait for you to start the game</li>
-                </ol>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 text-white/80">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                      <span>Go to your quiz app</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white/80">
+                      <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                      <span>Enter PIN: <strong className="text-yellow-300 text-xl">{game.pin}</strong></span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 text-white/80">
+                      <div className="w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                      <span>Enter their name</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white/80">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-sm font-bold">4</div>
+                      <span>Wait for you to start!</span>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

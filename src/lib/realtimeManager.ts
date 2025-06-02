@@ -1,7 +1,9 @@
+
 interface RealtimeEvent {
   type: 'player_joined' | 'player_left' | 'game_started' | 'question_started' | 'answer_submitted' | 'game_ended';
   payload: any;
   timestamp: number;
+  gamePin: string;
 }
 
 interface GameSubscription {
@@ -12,6 +14,36 @@ interface GameSubscription {
 class RealtimeManager {
   private subscriptions: Map<string, GameSubscription[]> = new Map();
   private eventHistory: Map<string, RealtimeEvent[]> = new Map();
+  private storageEventListener: ((e: StorageEvent) => void) | null = null;
+
+  constructor() {
+    this.initializeStorageListener();
+  }
+
+  private initializeStorageListener() {
+    this.storageEventListener = (e: StorageEvent) => {
+      if (e.key?.startsWith('game_event_')) {
+        try {
+          const event: RealtimeEvent = JSON.parse(e.newValue || '{}');
+          this.handleStorageEvent(event);
+        } catch (error) {
+          console.error('Error parsing storage event:', error);
+        }
+      }
+    };
+    window.addEventListener('storage', this.storageEventListener);
+  }
+
+  private handleStorageEvent(event: RealtimeEvent) {
+    const subscribers = this.subscriptions.get(event.gamePin) || [];
+    subscribers.forEach(sub => {
+      try {
+        sub.callback(event);
+      } catch (error) {
+        console.error('Error in realtime callback:', error);
+      }
+    });
+  }
 
   // Subscribe to game events
   subscribe(pin: string, callback: (event: RealtimeEvent) => void): () => void {
@@ -38,12 +70,13 @@ class RealtimeManager {
     };
   }
 
-  // Emit event to all subscribers
+  // Emit event to all subscribers via localStorage
   emit(pin: string, type: RealtimeEvent['type'], payload: any): void {
     const event: RealtimeEvent = {
       type,
       payload,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      gamePin: pin
     };
 
     // Store in history
@@ -58,7 +91,16 @@ class RealtimeManager {
       history.splice(0, history.length - 50);
     }
 
-    // Notify all subscribers
+    // Emit via localStorage to reach other tabs/devices on same network
+    const eventKey = `game_event_${pin}_${Date.now()}`;
+    localStorage.setItem(eventKey, JSON.stringify(event));
+    
+    // Clean up old events
+    setTimeout(() => {
+      localStorage.removeItem(eventKey);
+    }, 5000);
+
+    // Notify local subscribers immediately
     const subscribers = this.subscriptions.get(pin) || [];
     subscribers.forEach(sub => {
       try {
@@ -99,6 +141,13 @@ class RealtimeManager {
   cleanup(pin: string): void {
     this.subscriptions.delete(pin);
     this.eventHistory.delete(pin);
+  }
+
+  // Cleanup on destroy
+  destroy(): void {
+    if (this.storageEventListener) {
+      window.removeEventListener('storage', this.storageEventListener);
+    }
   }
 }
 
