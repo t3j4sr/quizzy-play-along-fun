@@ -1,6 +1,6 @@
 
 interface RealtimeEvent {
-  type: 'player_joined' | 'player_left' | 'game_started' | 'question_started' | 'answer_submitted' | 'game_ended';
+  type: 'player_joined' | 'player_left' | 'game_started' | 'question_started' | 'answer_submitted' | 'game_ended' | 'game_created';
   payload: any;
   timestamp: number;
   gamePin: string;

@@ -1,4 +1,3 @@
-
 import { realtimeManager } from './realtimeManager';
 
 export interface Player {
@@ -116,10 +115,8 @@ class GameManager {
     this.games.set(gameSession.pin, gameSession);
     this.saveGameToStorage(gameSession);
     
-    // Emit creation event
-    setTimeout(() => {
-      realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
-    }, 100);
+    // Emit creation event without timeout to ensure it works
+    realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
     
     return gameSession;
   }
