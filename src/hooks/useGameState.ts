@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gameManager, type GameSession, type Player, type Quiz } from '@/lib/gameManager';
 import { realtimeManager } from '@/lib/realtimeManager';
@@ -32,16 +33,16 @@ export function useGameState(options: UseGameStateOptions = {}) {
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Connect to game with real-time updates
-  const connect = useCallback((gamePin: string) => {
+  const connect = useCallback(async (gamePin: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const game = gameManager.getGameByPin(gamePin);
+      const game = await gameManager.getGameByPin(gamePin);
       if (!game) {
         throw new Error('Game not found');
       }
 
-      const quiz = gameManager.getQuiz(game.quizId);
+      const quiz = await gameManager.getQuiz(game.quizId);
       if (!quiz) {
         throw new Error('Quiz not found');
       }
@@ -64,11 +65,11 @@ export function useGameState(options: UseGameStateOptions = {}) {
         unsubscribeRef.current();
       }
 
-      const unsubscribe = realtimeManager.subscribe(gamePin, (event) => {
+      const unsubscribe = realtimeManager.subscribe(gamePin, async (event) => {
         console.log('Real-time event received:', event);
         
-        // Refresh game state from storage
-        const updatedGame = gameManager.getGameByPin(gamePin);
+        // Refresh game state from Supabase
+        const updatedGame = await gameManager.getGameByPin(gamePin);
         if (updatedGame) {
           setState(prev => ({
             ...prev,
@@ -124,8 +125,8 @@ export function useGameState(options: UseGameStateOptions = {}) {
   }, []);
 
   // Join game as player
-  const joinGame = useCallback((gamePin: string, playerName: string) => {
-    const result = gameManager.addPlayerToGame(gamePin, playerName);
+  const joinGame = useCallback(async (gamePin: string, playerName: string) => {
+    const result = await gameManager.addPlayerToGame(gamePin, playerName);
     
     if (result.success && result.player) {
       toast({ title: `Welcome ${playerName}! You've joined the game.` });
@@ -141,10 +142,10 @@ export function useGameState(options: UseGameStateOptions = {}) {
   }, []);
 
   // Start game (host only)
-  const startGame = useCallback(() => {
+  const startGame = useCallback(async () => {
     if (!state.game) return false;
 
-    const success = gameManager.startGame(state.game.pin);
+    const success = await gameManager.startGame(state.game.pin);
     if (success) {
       toast({ title: 'Game started!' });
     }
@@ -152,10 +153,10 @@ export function useGameState(options: UseGameStateOptions = {}) {
   }, [state.game]);
 
   // Submit answer
-  const submitAnswer = useCallback((questionId: string, answerId: string, timeSpent: number) => {
+  const submitAnswer = useCallback(async (questionId: string, answerId: string, timeSpent: number) => {
     if (!state.game || !state.currentPlayer) return false;
 
-    const success = gameManager.submitAnswer(
+    const success = await gameManager.submitAnswer(
       state.game.pin, 
       state.currentPlayer.id, 
       questionId, 

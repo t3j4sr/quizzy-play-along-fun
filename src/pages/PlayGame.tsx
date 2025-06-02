@@ -55,14 +55,14 @@ const PlayGame = () => {
     }
   }, [timeLeft, gamePhase, isAnswered]);
 
-  const handleAnswerSubmit = (answerId) => {
+  const handleAnswerSubmit = async (answerId) => {
     if (isAnswered || !currentQuestion || !currentPlayer) return;
     
     setSelectedAnswer(answerId);
     setIsAnswered(true);
     
     const timeSpent = currentQuestion.timeLimit - timeLeft;
-    const success = submitAnswer(currentQuestion.id, answerId || '', timeSpent);
+    const success = await submitAnswer(currentQuestion.id, answerId || '', timeSpent);
     
     if (success && answerId && currentQuestion.answers.find(a => a.id === answerId)?.isCorrect) {
       // Calculate points like Kahoot: base points + speed bonus
@@ -89,24 +89,24 @@ const PlayGame = () => {
   const getAnswerStyle = (answer) => {
     if (!isAnswered) {
       return selectedAnswer === answer.id 
-        ? "bg-blue-500 text-white scale-105 shadow-lg" 
-        : "bg-white hover:bg-gray-50 hover:scale-105";
+        ? "bg-white text-black scale-105 shadow-lg border-2 border-white" 
+        : "bg-black/50 text-white hover:bg-black/70 hover:scale-105 border border-white/30";
     }
     
     if (answer.isCorrect) {
-      return "bg-green-500 text-white";
+      return "bg-white text-black border-2 border-white";
     }
     
     if (selectedAnswer === answer.id && !answer.isCorrect) {
-      return "bg-red-500 text-white";
+      return "bg-red-500 text-white border-2 border-red-300";
     }
     
-    return "bg-gray-200 text-gray-500";
+    return "bg-gray-500 text-gray-300 border border-gray-400";
   };
 
   if (!game || !quiz || !currentQuestion) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
         <div className="text-white text-xl">Loading game...</div>
       </div>
     );
@@ -114,21 +114,21 @@ const PlayGame = () => {
 
   if (isGameFinished || gamePhase === 'final') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center px-4">
-        <Card className="w-full max-w-2xl bg-white/95 backdrop-blur-sm shadow-2xl">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
+        <Card className="w-full max-w-2xl bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
           <CardContent className="text-center py-12">
-            <Trophy className="h-24 w-24 text-yellow-500 mx-auto mb-6" />
-            <h1 className="text-4xl font-bold text-gray-800 mb-4">Game Complete!</h1>
-            <p className="text-xl text-gray-600 mb-6">
+            <Trophy className="h-24 w-24 text-white mx-auto mb-6" />
+            <h1 className="text-4xl font-bold text-white mb-4">Game Complete!</h1>
+            <p className="text-xl text-white/80 mb-6">
               Well done, {currentPlayer?.name || 'Player'}!
             </p>
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg p-6 mb-6">
-              <p className="text-lg mb-2">Final Score</p>
+            <div className="bg-gradient-to-r from-white to-gray-200 text-black rounded-lg p-6 mb-6">
+              <p className="text-lg mb-2 font-semibold">Final Score</p>
               <p className="text-5xl font-bold">{(currentPlayer?.score || 0).toLocaleString()}</p>
             </div>
             <Button 
               onClick={() => navigate('/')}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              className="bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black"
             >
               Play Again
             </Button>
@@ -143,21 +143,21 @@ const PlayGame = () => {
     const playerRank = leaderboard.findIndex(p => p.id === currentPlayer?.id) + 1;
     
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-500 via-blue-500 to-purple-600 flex items-center justify-center px-4">
-        <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
           <CardContent className="text-center py-12">
-            <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Leaderboard</h2>
+            <Trophy className="h-16 w-16 text-white mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-4">Leaderboard</h2>
             <div className="space-y-3 mb-6">
               {leaderboard.slice(0, 5).map((player, index) => (
                 <div
                   key={player.id}
-                  className={`rounded-lg p-4 ${
+                  className={`rounded-lg p-4 border ${
                     player.id === currentPlayer?.id
-                      ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white'
+                      ? 'bg-gradient-to-r from-white to-gray-200 text-black border-white'
                       : index === 0
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                      : 'bg-gray-200'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-600 text-white border-gray-500'
+                      : 'bg-black/30 text-white border-white/20'
                   }`}
                 >
                   <div className="flex justify-between items-center">
@@ -171,11 +171,11 @@ const PlayGame = () => {
               ))}
             </div>
             {playerRank > 5 && (
-              <div className="bg-blue-100 rounded-lg p-3 mb-4">
-                <p className="text-blue-800">Your rank: #{playerRank}</p>
+              <div className="bg-white/20 rounded-lg p-3 mb-4 border border-white/30">
+                <p className="text-white">Your rank: #{playerRank}</p>
               </div>
             )}
-            <p className="text-sm text-gray-500">Next question loading...</p>
+            <p className="text-sm text-white/60">Next question loading...</p>
           </CardContent>
         </Card>
       </div>
@@ -188,34 +188,36 @@ const PlayGame = () => {
     
     return (
       <div className={`min-h-screen flex items-center justify-center px-4 ${
-        isCorrect ? 'bg-gradient-to-br from-green-400 to-green-600' : 'bg-gradient-to-br from-red-400 to-red-600'
+        isCorrect ? 'bg-gradient-to-br from-gray-100 via-white to-gray-200' : 'bg-gradient-to-br from-gray-800 via-black to-gray-900'
       }`}>
-        <Card className="w-full max-w-2xl bg-white/95 backdrop-blur-sm shadow-2xl">
+        <Card className={`w-full max-w-2xl backdrop-blur-sm shadow-2xl border ${
+          isCorrect ? 'bg-white/90 border-gray-300' : 'bg-black/50 border-white/20'
+        }`}>
           <CardContent className="text-center py-12">
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${
-              isCorrect ? 'bg-green-500' : 'bg-red-500'
+              isCorrect ? 'bg-white border-2 border-gray-300' : 'bg-red-500 border-2 border-red-300'
             }`}>
               {isCorrect ? (
-                <Zap className="h-12 w-12 text-white" />
+                <Zap className="h-12 w-12 text-black" />
               ) : (
                 <Clock className="h-12 w-12 text-white" />
               )}
             </div>
-            <h2 className={`text-4xl font-bold mb-4 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+            <h2 className={`text-4xl font-bold mb-4 ${isCorrect ? 'text-black' : 'text-white'}`}>
               {isCorrect ? 'Correct!' : selectedAnswer ? 'Incorrect!' : 'Time\'s Up!'}
             </h2>
             {!isCorrect && (
-              <p className="text-xl text-gray-600 mb-4">
+              <p className={`text-xl mb-4 ${isCorrect ? 'text-gray-700' : 'text-white/80'}`}>
                 The correct answer was: <strong>{correctAnswer?.text}</strong>
               </p>
             )}
             {isCorrect && pointsEarned > 0 && (
-              <p className="text-xl text-gray-600 mb-4">
+              <p className="text-xl text-gray-700 mb-4">
                 +{pointsEarned.toLocaleString()} points!
               </p>
             )}
-            <div className="bg-gray-100 rounded-lg p-4">
-              <p className="text-lg text-gray-700">
+            <div className={`rounded-lg p-4 border ${isCorrect ? 'bg-gray-100 border-gray-300' : 'bg-white/10 border-white/20'}`}>
+              <p className={`text-lg ${isCorrect ? 'text-gray-700' : 'text-white'}`}>
                 Your Score: <strong>{(currentPlayer?.score || 0).toLocaleString()}</strong>
               </p>
             </div>
@@ -226,12 +228,12 @@ const PlayGame = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4">
       <div className="container mx-auto max-w-4xl">
         {/* Header */}
         <div className="flex justify-between items-center mb-6 text-white">
           <div>
-            <Badge variant="secondary" className="bg-white/20 text-white border-none">
+            <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
               Question {(game.currentQuestionIndex || 0) + 1} of {quiz.questions.length}
             </Badge>
           </div>
@@ -256,9 +258,9 @@ const PlayGame = () => {
         </div>
 
         {/* Question */}
-        <Card className="bg-white/95 backdrop-blur-sm shadow-2xl mb-8">
+        <Card className="bg-black/50 backdrop-blur-sm shadow-2xl mb-8 border border-white/20">
           <CardContent className="py-8">
-            <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
+            <h1 className="text-3xl font-bold text-center text-white mb-8">
               {currentQuestion.question}
             </h1>
             

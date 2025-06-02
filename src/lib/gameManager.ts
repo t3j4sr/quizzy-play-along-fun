@@ -1,4 +1,6 @@
+
 import { realtimeManager } from './realtimeManager';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Player {
   id: string;
@@ -48,41 +50,94 @@ class GameManager {
   private quizzes: Map<string, Quiz> = new Map();
 
   // Quiz Management
-  createQuiz(quiz: Omit<Quiz, 'id' | 'createdAt'>): Quiz {
-    const newQuiz: Quiz = {
-      ...quiz,
-      id: this.generateId(),
-      createdAt: Date.now()
-    };
+  async createQuiz(quiz: Omit<Quiz, 'id' | 'createdAt'>): Promise<Quiz> {
+    console.log('GameManager: Creating quiz in Supabase:', quiz.title);
     
+    const { data, error } = await supabase
+      .from('quizzes')
+      .insert({
+        title: quiz.title,
+        description: quiz.description,
+        questions: quiz.questions,
+        created_by: quiz.createdBy
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('GameManager: Error creating quiz:', error);
+      throw new Error('Failed to create quiz: ' + error.message);
+    }
+
+    const newQuiz: Quiz = {
+      id: data.id,
+      title: data.title,
+      description: data.description || '',
+      questions: data.questions,
+      createdAt: new Date(data.created_at).getTime(),
+      createdBy: data.created_by
+    };
+
     this.quizzes.set(newQuiz.id, newQuiz);
-    this.saveToStorage('quizzes', Array.from(this.quizzes.values()));
     console.log('GameManager: Created quiz:', newQuiz.id);
     return newQuiz;
   }
 
-  getQuiz(quizId: string): Quiz | null {
+  async getQuiz(quizId: string): Promise<Quiz | null> {
     console.log('GameManager: Getting quiz:', quizId);
+    
+    // Check memory first
     let quiz = this.quizzes.get(quizId);
-    
-    // If not in memory, try to load from localStorage
-    if (!quiz) {
-      console.log('GameManager: Quiz not in memory, checking localStorage');
-      const savedQuiz = this.loadFromStorage(`quiz_${quizId}`);
-      if (savedQuiz) {
-        console.log('GameManager: Found quiz in localStorage');
-        quiz = { ...savedQuiz, id: quizId };
-        this.quizzes.set(quizId, quiz);
-      }
+    if (quiz) {
+      return quiz;
     }
-    
-    return quiz || null;
+
+    // Fetch from Supabase
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('*')
+      .eq('id', quizId)
+      .single();
+
+    if (error) {
+      console.error('GameManager: Error fetching quiz:', error);
+      return null;
+    }
+
+    if (data) {
+      quiz = {
+        id: data.id,
+        title: data.title,
+        description: data.description || '',
+        questions: data.questions,
+        createdAt: new Date(data.created_at).getTime(),
+        createdBy: data.created_by
+      };
+      this.quizzes.set(quizId, quiz);
+      console.log('GameManager: Loaded quiz from Supabase:', quizId);
+      return quiz;
+    }
+
+    return null;
   }
 
-  updateQuiz(quizId: string, updatedQuiz: Quiz): boolean {
+  async updateQuiz(quizId: string, updatedQuiz: Quiz): Promise<boolean> {
     try {
+      const { error } = await supabase
+        .from('quizzes')
+        .update({
+          title: updatedQuiz.title,
+          description: updatedQuiz.description,
+          questions: updatedQuiz.questions
+        })
+        .eq('id', quizId);
+
+      if (error) {
+        console.error('GameManager: Error updating quiz:', error);
+        return false;
+      }
+
       this.quizzes.set(quizId, updatedQuiz);
-      this.saveToStorage('quizzes', Array.from(this.quizzes.values()));
       console.log('GameManager: Updated quiz:', quizId);
       return true;
     } catch (error) {
@@ -92,59 +147,101 @@ class GameManager {
   }
 
   // Game Session Management
-  createGameSession(quizId: string): GameSession {
+  async createGameSession(quizId: string): Promise<GameSession> {
     console.log('GameManager: Creating game session for quiz:', quizId);
     
-    const quiz = this.getQuiz(quizId);
+    const quiz = await this.getQuiz(quizId);
     if (!quiz) {
       console.error('GameManager: Quiz not found for ID:', quizId);
       throw new Error('Quiz not found');
     }
 
+    const pin = this.generatePin();
+    
+    const { data, error } = await supabase
+      .from('game_sessions')
+      .insert({
+        quiz_id: quizId,
+        pin: pin,
+        status: 'waiting',
+        current_question_index: 0,
+        players: []
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('GameManager: Error creating game session:', error);
+      throw new Error('Failed to create game session: ' + error.message);
+    }
+
     const gameSession: GameSession = {
-      id: this.generateId(),
-      quizId,
-      pin: this.generatePin(),
-      status: 'waiting',
-      currentQuestionIndex: 0,
-      players: [],
-      createdAt: Date.now()
+      id: data.id,
+      quizId: data.quiz_id,
+      pin: data.pin,
+      status: data.status,
+      currentQuestionIndex: data.current_question_index,
+      players: data.players || [],
+      createdAt: new Date(data.created_at).getTime(),
+      startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
+      finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
     };
 
     console.log('GameManager: Created game session:', gameSession);
     this.games.set(gameSession.pin, gameSession);
-    this.saveGameToStorage(gameSession);
     
-    // Emit creation event without timeout to ensure it works
+    // Emit creation event
     realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
     
     return gameSession;
   }
 
-  getGameByPin(pin: string): GameSession | null {
+  async getGameByPin(pin: string): Promise<GameSession | null> {
     console.log('GameManager: Getting game by PIN:', pin);
     
-    // Try from memory first
+    // Check memory first
     let game = this.games.get(pin);
-    
-    // If not in memory, try to load from localStorage
-    if (!game) {
-      console.log('GameManager: Game not in memory, checking localStorage');
-      game = this.loadGameFromStorage(pin);
-      if (game) {
-        console.log('GameManager: Found game in localStorage');
-        this.games.set(pin, game);
-      }
+    if (game) {
+      return game;
     }
-    
-    return game || null;
+
+    // Fetch from Supabase
+    const { data, error } = await supabase
+      .from('game_sessions')
+      .select('*')
+      .eq('pin', pin)
+      .single();
+
+    if (error) {
+      console.error('GameManager: Error fetching game session:', error);
+      return null;
+    }
+
+    if (data) {
+      game = {
+        id: data.id,
+        quizId: data.quiz_id,
+        pin: data.pin,
+        status: data.status,
+        currentQuestionIndex: data.current_question_index,
+        players: data.players || [],
+        createdAt: new Date(data.created_at).getTime(),
+        startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
+        finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
+      };
+      this.games.set(pin, game);
+      console.log('GameManager: Loaded game from Supabase:', pin);
+      return game;
+    }
+
+    return null;
   }
 
   // Player Management
-  addPlayerToGame(pin: string, playerName: string): { success: boolean; player?: Player; error?: string } {
+  async addPlayerToGame(pin: string, playerName: string): Promise<{ success: boolean; player?: Player; error?: string }> {
     console.log('GameManager: Adding player to game:', pin, playerName);
     
-    const game = this.getGameByPin(pin);
+    const game = await this.getGameByPin(pin);
     if (!game) {
       console.error('GameManager: Game not found for PIN:', pin);
       return { success: false, error: 'Game not found' };
@@ -169,8 +266,21 @@ class GameManager {
       joinedAt: Date.now()
     };
 
-    game.players.push(player);
-    this.saveGameToStorage(game);
+    const updatedPlayers = [...game.players, player];
+
+    // Update in Supabase
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({ players: updatedPlayers })
+      .eq('pin', pin);
+
+    if (error) {
+      console.error('GameManager: Error adding player:', error);
+      return { success: false, error: 'Failed to join game' };
+    }
+
+    game.players = updatedPlayers;
+    this.games.set(pin, game);
     
     console.log('GameManager: Player added successfully:', player.id);
     
@@ -183,18 +293,31 @@ class GameManager {
   }
 
   // Game Flow
-  startGame(pin: string): boolean {
+  async startGame(pin: string): Promise<boolean> {
     console.log('GameManager: Starting game:', pin);
     
-    const game = this.getGameByPin(pin);
+    const game = await this.getGameByPin(pin);
     if (!game || game.status !== 'waiting') {
       console.error('GameManager: Cannot start game - invalid state');
       return false;
     }
 
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({ 
+        status: 'playing',
+        started_at: new Date().toISOString()
+      })
+      .eq('pin', pin);
+
+    if (error) {
+      console.error('GameManager: Error starting game:', error);
+      return false;
+    }
+
     game.status = 'playing';
     game.startedAt = Date.now();
-    this.saveGameToStorage(game);
+    this.games.set(pin, game);
     
     console.log('GameManager: Game started successfully');
     
@@ -206,11 +329,11 @@ class GameManager {
     return true;
   }
 
-  submitAnswer(pin: string, playerId: string, questionId: string, answerId: string, timeSpent: number): boolean {
+  async submitAnswer(pin: string, playerId: string, questionId: string, answerId: string, timeSpent: number): Promise<boolean> {
     console.log('GameManager: Submitting answer:', { pin, playerId, questionId, answerId, timeSpent });
     
-    const game = this.getGameByPin(pin);
-    const quiz = game ? this.getQuiz(game.quizId) : null;
+    const game = await this.getGameByPin(pin);
+    const quiz = game ? await this.getQuiz(game.quizId) : null;
     
     if (!game || !quiz || game.status !== 'playing') {
       console.error('GameManager: Invalid game or quiz state');
@@ -237,12 +360,10 @@ class GameManager {
     // Calculate points based on time and correctness (like Kahoot)
     let points = 0;
     if (isCorrect) {
-      // Base points for correct answer
       const basePoints = question.points || 1000;
-      // Time bonus: faster answers get more points
       const timeRatio = Math.max(0, (question.timeLimit - timeSpent) / question.timeLimit);
-      const timeBonus = Math.floor(basePoints * 0.5 * timeRatio); // Up to 50% bonus for speed
-      points = Math.floor(basePoints * 0.5) + timeBonus; // 50% base + up to 50% time bonus
+      const timeBonus = Math.floor(basePoints * 0.5 * timeRatio);
+      points = Math.floor(basePoints * 0.5) + timeBonus;
     }
 
     player.answers.push({
@@ -253,7 +374,19 @@ class GameManager {
     });
 
     player.score += points;
-    this.saveGameToStorage(game);
+
+    // Update in Supabase
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({ players: game.players })
+      .eq('pin', pin);
+
+    if (error) {
+      console.error('GameManager: Error submitting answer:', error);
+      return false;
+    }
+
+    this.games.set(pin, game);
     
     console.log('GameManager: Answer submitted, points awarded:', points);
     
@@ -265,17 +398,35 @@ class GameManager {
     return true;
   }
 
-  nextQuestion(pin: string): boolean {
-    const game = this.getGameByPin(pin);
-    const quiz = game ? this.getQuiz(game.quizId) : null;
+  async nextQuestion(pin: string): Promise<boolean> {
+    const game = await this.getGameByPin(pin);
+    const quiz = game ? await this.getQuiz(game.quizId) : null;
     
     if (!game || !quiz) {
       return false;
     }
 
-    game.currentQuestionIndex++;
+    const newQuestionIndex = game.currentQuestionIndex + 1;
+    let updateData: any = { current_question_index: newQuestionIndex };
     
-    if (game.currentQuestionIndex >= quiz.questions.length) {
+    if (newQuestionIndex >= quiz.questions.length) {
+      updateData.status = 'finished';
+      updateData.finished_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from('game_sessions')
+      .update(updateData)
+      .eq('pin', pin);
+
+    if (error) {
+      console.error('GameManager: Error updating question:', error);
+      return false;
+    }
+
+    game.currentQuestionIndex = newQuestionIndex;
+    
+    if (newQuestionIndex >= quiz.questions.length) {
       game.status = 'finished';
       game.finishedAt = Date.now();
       
@@ -286,18 +437,18 @@ class GameManager {
       }, 100);
     } else {
       // Emit new question event
-      const currentQuestion = quiz.questions[game.currentQuestionIndex];
+      const currentQuestion = quiz.questions[newQuestionIndex];
       setTimeout(() => {
-        realtimeManager.questionStarted(pin, game.currentQuestionIndex, currentQuestion.timeLimit);
+        realtimeManager.questionStarted(pin, newQuestionIndex, currentQuestion.timeLimit);
       }, 100);
     }
 
-    this.saveGameToStorage(game);
+    this.games.set(pin, game);
     return true;
   }
 
   getLeaderboard(pin: string): Player[] {
-    const game = this.getGameByPin(pin);
+    const game = this.games.get(pin);
     if (!game) {
       return [];
     }
@@ -305,44 +456,10 @@ class GameManager {
     return [...game.players].sort((a, b) => b.score - a.score);
   }
 
-  // Storage methods for persistence
-  private saveGameToStorage(game: GameSession): void {
-    try {
-      console.log('GameManager: Saving game to storage:', game.pin);
-      localStorage.setItem(`game_${game.pin}`, JSON.stringify(game));
-      
-      // Also save to a games list
-      const gamesList = this.loadFromStorage('games_list') || [];
-      const existingIndex = gamesList.findIndex((g: any) => g.pin === game.pin);
-      if (existingIndex >= 0) {
-        gamesList[existingIndex] = { pin: game.pin, createdAt: game.createdAt };
-      } else {
-        gamesList.push({ pin: game.pin, createdAt: game.createdAt });
-      }
-      this.saveToStorage('games_list', gamesList);
-    } catch (error) {
-      console.error('GameManager: Failed to save game to localStorage:', error);
-    }
-  }
-
-  private loadGameFromStorage(pin: string): GameSession | null {
-    try {
-      const data = localStorage.getItem(`game_${pin}`);
-      const game = data ? JSON.parse(data) : null;
-      if (game) {
-        console.log('GameManager: Loaded game from storage:', pin);
-      }
-      return game;
-    } catch (error) {
-      console.error('GameManager: Failed to load game from localStorage:', error);
-      return null;
-    }
-  }
-
   // Analytics
-  getGameStats(pin: string) {
-    const game = this.getGameByPin(pin);
-    const quiz = game ? this.getQuiz(game.quizId) : null;
+  async getGameStats(pin: string) {
+    const game = await this.getGameByPin(pin);
+    const quiz = game ? await this.getQuiz(game.quizId) : null;
     
     if (!game || !quiz) {
       return null;
@@ -392,45 +509,10 @@ class GameManager {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  private saveToStorage(key: string, data: any): void {
-    try {
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch (error) {
-      console.warn('GameManager: Failed to save to localStorage:', error);
-    }
-  }
-
-  private loadFromStorage(key: string): any {
-    try {
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      console.warn('GameManager: Failed to load from localStorage:', error);
-      return null;
-    }
-  }
-
-  // Initialize from localStorage
-  initialize(): void {
+  // Initialize from localStorage for backward compatibility
+  async initialize(): Promise<void> {
     console.log('GameManager: Initializing...');
-    
-    const savedQuizzes = this.loadFromStorage('quizzes');
-    if (savedQuizzes && Array.isArray(savedQuizzes)) {
-      savedQuizzes.forEach(quiz => {
-        this.quizzes.set(quiz.id, quiz);
-      });
-      console.log('GameManager: Loaded', savedQuizzes.length, 'quizzes from storage');
-    }
-
-    // Load active games
-    const gamesList = this.loadFromStorage('games_list') || [];
-    gamesList.forEach((gameInfo: any) => {
-      const game = this.loadGameFromStorage(gameInfo.pin);
-      if (game) {
-        this.games.set(game.pin, game);
-      }
-    });
-    console.log('GameManager: Loaded', gamesList.length, 'games from storage');
+    // No need to load from localStorage anymore, Supabase handles persistence
   }
 }
 
