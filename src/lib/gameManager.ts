@@ -1,3 +1,4 @@
+
 import { realtimeManager } from './realtimeManager';
 
 export interface Player {
@@ -57,17 +58,47 @@ class GameManager {
     
     this.quizzes.set(newQuiz.id, newQuiz);
     this.saveToStorage('quizzes', Array.from(this.quizzes.values()));
+    console.log('GameManager: Created quiz:', newQuiz.id);
     return newQuiz;
   }
 
   getQuiz(quizId: string): Quiz | null {
-    return this.quizzes.get(quizId) || null;
+    console.log('GameManager: Getting quiz:', quizId);
+    let quiz = this.quizzes.get(quizId);
+    
+    // If not in memory, try to load from localStorage
+    if (!quiz) {
+      console.log('GameManager: Quiz not in memory, checking localStorage');
+      const savedQuiz = this.loadFromStorage(`quiz_${quizId}`);
+      if (savedQuiz) {
+        console.log('GameManager: Found quiz in localStorage');
+        quiz = { ...savedQuiz, id: quizId };
+        this.quizzes.set(quizId, quiz);
+      }
+    }
+    
+    return quiz || null;
+  }
+
+  updateQuiz(quizId: string, updatedQuiz: Quiz): boolean {
+    try {
+      this.quizzes.set(quizId, updatedQuiz);
+      this.saveToStorage('quizzes', Array.from(this.quizzes.values()));
+      console.log('GameManager: Updated quiz:', quizId);
+      return true;
+    } catch (error) {
+      console.error('GameManager: Error updating quiz:', error);
+      return false;
+    }
   }
 
   // Game Session Management
   createGameSession(quizId: string): GameSession {
+    console.log('GameManager: Creating game session for quiz:', quizId);
+    
     const quiz = this.getQuiz(quizId);
     if (!quiz) {
+      console.error('GameManager: Quiz not found for ID:', quizId);
       throw new Error('Quiz not found');
     }
 
@@ -81,19 +112,30 @@ class GameManager {
       createdAt: Date.now()
     };
 
+    console.log('GameManager: Created game session:', gameSession);
     this.games.set(gameSession.pin, gameSession);
     this.saveGameToStorage(gameSession);
+    
+    // Emit creation event
+    setTimeout(() => {
+      realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
+    }, 100);
+    
     return gameSession;
   }
 
   getGameByPin(pin: string): GameSession | null {
+    console.log('GameManager: Getting game by PIN:', pin);
+    
     // Try from memory first
     let game = this.games.get(pin);
     
     // If not in memory, try to load from localStorage
     if (!game) {
+      console.log('GameManager: Game not in memory, checking localStorage');
       game = this.loadGameFromStorage(pin);
       if (game) {
+        console.log('GameManager: Found game in localStorage');
         this.games.set(pin, game);
       }
     }
@@ -103,17 +145,22 @@ class GameManager {
 
   // Player Management
   addPlayerToGame(pin: string, playerName: string): { success: boolean; player?: Player; error?: string } {
+    console.log('GameManager: Adding player to game:', pin, playerName);
+    
     const game = this.getGameByPin(pin);
     if (!game) {
+      console.error('GameManager: Game not found for PIN:', pin);
       return { success: false, error: 'Game not found' };
     }
 
     if (game.status !== 'waiting') {
+      console.error('GameManager: Game already started');
       return { success: false, error: 'Game already started' };
     }
 
     // Check if name already exists
     if (game.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
+      console.error('GameManager: Name already taken:', playerName);
       return { success: false, error: 'Name already taken' };
     }
 
@@ -128,16 +175,23 @@ class GameManager {
     game.players.push(player);
     this.saveGameToStorage(game);
     
+    console.log('GameManager: Player added successfully:', player.id);
+    
     // Emit real-time event
-    realtimeManager.playerJoined(pin, { id: player.id, name: player.name });
+    setTimeout(() => {
+      realtimeManager.playerJoined(pin, { id: player.id, name: player.name });
+    }, 100);
     
     return { success: true, player };
   }
 
   // Game Flow
   startGame(pin: string): boolean {
+    console.log('GameManager: Starting game:', pin);
+    
     const game = this.getGameByPin(pin);
     if (!game || game.status !== 'waiting') {
+      console.error('GameManager: Cannot start game - invalid state');
       return false;
     }
 
@@ -145,17 +199,24 @@ class GameManager {
     game.startedAt = Date.now();
     this.saveGameToStorage(game);
     
+    console.log('GameManager: Game started successfully');
+    
     // Emit real-time event
-    realtimeManager.gameStarted(pin);
+    setTimeout(() => {
+      realtimeManager.gameStarted(pin);
+    }, 100);
     
     return true;
   }
 
   submitAnswer(pin: string, playerId: string, questionId: string, answerId: string, timeSpent: number): boolean {
+    console.log('GameManager: Submitting answer:', { pin, playerId, questionId, answerId, timeSpent });
+    
     const game = this.getGameByPin(pin);
     const quiz = game ? this.getQuiz(game.quizId) : null;
     
     if (!game || !quiz || game.status !== 'playing') {
+      console.error('GameManager: Invalid game or quiz state');
       return false;
     }
 
@@ -163,11 +224,13 @@ class GameManager {
     const question = quiz.questions.find(q => q.id === questionId);
     
     if (!player || !question) {
+      console.error('GameManager: Player or question not found');
       return false;
     }
 
     // Check if player already answered this question
     if (player.answers.some(a => a.questionId === questionId)) {
+      console.error('GameManager: Player already answered this question');
       return false;
     }
 
@@ -195,8 +258,12 @@ class GameManager {
     player.score += points;
     this.saveGameToStorage(game);
     
+    console.log('GameManager: Answer submitted, points awarded:', points);
+    
     // Emit real-time event
-    realtimeManager.answerSubmitted(pin, playerId, answerId);
+    setTimeout(() => {
+      realtimeManager.answerSubmitted(pin, playerId, answerId);
+    }, 100);
     
     return true;
   }
@@ -217,11 +284,15 @@ class GameManager {
       
       // Emit game ended event
       const finalScores = this.getLeaderboard(pin);
-      realtimeManager.gameEnded(pin, finalScores);
+      setTimeout(() => {
+        realtimeManager.gameEnded(pin, finalScores);
+      }, 100);
     } else {
       // Emit new question event
       const currentQuestion = quiz.questions[game.currentQuestionIndex];
-      realtimeManager.questionStarted(pin, game.currentQuestionIndex, currentQuestion.timeLimit);
+      setTimeout(() => {
+        realtimeManager.questionStarted(pin, game.currentQuestionIndex, currentQuestion.timeLimit);
+      }, 100);
     }
 
     this.saveGameToStorage(game);
@@ -240,7 +311,9 @@ class GameManager {
   // Storage methods for persistence
   private saveGameToStorage(game: GameSession): void {
     try {
+      console.log('GameManager: Saving game to storage:', game.pin);
       localStorage.setItem(`game_${game.pin}`, JSON.stringify(game));
+      
       // Also save to a games list
       const gamesList = this.loadFromStorage('games_list') || [];
       const existingIndex = gamesList.findIndex((g: any) => g.pin === game.pin);
@@ -251,16 +324,20 @@ class GameManager {
       }
       this.saveToStorage('games_list', gamesList);
     } catch (error) {
-      console.warn('Failed to save game to localStorage:', error);
+      console.error('GameManager: Failed to save game to localStorage:', error);
     }
   }
 
   private loadGameFromStorage(pin: string): GameSession | null {
     try {
       const data = localStorage.getItem(`game_${pin}`);
-      return data ? JSON.parse(data) : null;
+      const game = data ? JSON.parse(data) : null;
+      if (game) {
+        console.log('GameManager: Loaded game from storage:', pin);
+      }
+      return game;
     } catch (error) {
-      console.warn('Failed to load game from localStorage:', error);
+      console.error('GameManager: Failed to load game from localStorage:', error);
       return null;
     }
   }
@@ -322,7 +399,7 @@ class GameManager {
     try {
       localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
-      console.warn('Failed to save to localStorage:', error);
+      console.warn('GameManager: Failed to save to localStorage:', error);
     }
   }
 
@@ -331,18 +408,21 @@ class GameManager {
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      console.warn('Failed to load from localStorage:', error);
+      console.warn('GameManager: Failed to load from localStorage:', error);
       return null;
     }
   }
 
   // Initialize from localStorage
   initialize(): void {
+    console.log('GameManager: Initializing...');
+    
     const savedQuizzes = this.loadFromStorage('quizzes');
     if (savedQuizzes && Array.isArray(savedQuizzes)) {
       savedQuizzes.forEach(quiz => {
         this.quizzes.set(quiz.id, quiz);
       });
+      console.log('GameManager: Loaded', savedQuizzes.length, 'quizzes from storage');
     }
 
     // Load active games
@@ -353,6 +433,7 @@ class GameManager {
         this.games.set(game.pin, game);
       }
     });
+    console.log('GameManager: Loaded', gamesList.length, 'games from storage');
   }
 }
 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -17,6 +16,7 @@ const HostGame = () => {
   const [quiz, setQuiz] = useState(null);
   const [gameSession, setGameSession] = useState(null);
   const [customPoints, setCustomPoints] = useState(1000);
+  const [isLoading, setIsLoading] = useState(true);
   
   const { game, connect } = useGameState({ 
     pin: gameSession?.pin,
@@ -24,42 +24,93 @@ const HostGame = () => {
   });
 
   useEffect(() => {
+    console.log('HostGame: Starting initialization with quizId:', quizId);
+    
     if (quizId) {
-      const savedQuiz = localStorage.getItem(`quiz_${quizId}`);
-      if (savedQuiz) {
-        const parsedQuiz = JSON.parse(savedQuiz);
-        setQuiz(parsedQuiz);
+      setIsLoading(true);
+      
+      try {
+        // First, try to load the quiz from localStorage
+        const savedQuiz = localStorage.getItem(`quiz_${quizId}`);
+        console.log('HostGame: Loaded quiz from storage:', savedQuiz ? 'found' : 'not found');
         
-        // Create a new game session
-        try {
+        if (savedQuiz) {
+          const parsedQuiz = JSON.parse(savedQuiz);
+          console.log('HostGame: Parsed quiz:', parsedQuiz);
+          setQuiz(parsedQuiz);
+          
+          // Ensure quiz has the expected structure
+          if (!parsedQuiz.questions || !Array.isArray(parsedQuiz.questions)) {
+            console.error('HostGame: Invalid quiz structure - missing questions array');
+            toast({ title: "Invalid quiz format", variant: "destructive" });
+            navigate('/');
+            return;
+          }
+          
+          // Register quiz with gameManager if not already registered
+          if (!gameManager.getQuiz(quizId)) {
+            console.log('HostGame: Registering quiz with gameManager');
+            gameManager.createQuiz({
+              title: parsedQuiz.title,
+              description: parsedQuiz.description || '',
+              questions: parsedQuiz.questions.map(q => ({
+                ...q,
+                points: q.points || 1000
+              })),
+              createdBy: 'host'
+            });
+          }
+          
+          // Create a new game session
+          console.log('HostGame: Creating game session');
           const newGameSession = gameManager.createGameSession(quizId);
+          console.log('HostGame: Created game session:', newGameSession);
           setGameSession(newGameSession);
           
           // Connect to track real-time updates
-          setTimeout(() => connect(newGameSession.pin), 100);
-        } catch (error) {
-          toast({ title: "Failed to create game session", variant: "destructive" });
+          setTimeout(() => {
+            console.log('HostGame: Connecting to game session');
+            connect(newGameSession.pin);
+          }, 200);
+          
+          setIsLoading(false);
+        } else {
+          console.error('HostGame: Quiz not found in localStorage');
+          toast({ title: "Quiz not found", variant: "destructive" });
           navigate('/');
         }
-      } else {
-        toast({ title: "Quiz not found", variant: "destructive" });
+      } catch (error) {
+        console.error('HostGame: Error during initialization:', error);
+        toast({ title: "Failed to load quiz", description: error.message, variant: "destructive" });
         navigate('/');
       }
     }
   }, [quizId, navigate, connect]);
 
   const updateQuestionPoints = () => {
-    if (!quiz || !customPoints) return;
+    if (!quiz || !customPoints) {
+      toast({ title: "Please enter valid points value", variant: "destructive" });
+      return;
+    }
     
-    const updatedQuiz = {
-      ...quiz,
-      questions: quiz.questions.map(q => ({ ...q, points: customPoints }))
-    };
-    
-    // Save updated quiz
-    localStorage.setItem(`quiz_${quizId}`, JSON.stringify(updatedQuiz));
-    setQuiz(updatedQuiz);
-    toast({ title: `All questions now worth ${customPoints} points!` });
+    try {
+      const updatedQuiz = {
+        ...quiz,
+        questions: quiz.questions.map(q => ({ ...q, points: customPoints }))
+      };
+      
+      // Save updated quiz
+      localStorage.setItem(`quiz_${quizId}`, JSON.stringify(updatedQuiz));
+      setQuiz(updatedQuiz);
+      
+      // Update in gameManager as well
+      gameManager.updateQuiz(quizId, updatedQuiz);
+      
+      toast({ title: `All questions now worth ${customPoints} points!` });
+    } catch (error) {
+      console.error('HostGame: Error updating points:', error);
+      toast({ title: "Failed to update points", variant: "destructive" });
+    }
   };
 
   const startGame = () => {
@@ -68,19 +119,45 @@ const HostGame = () => {
       return;
     }
     
-    const success = gameManager.startGame(game.pin);
-    if (success) {
-      navigate(`/play/${quizId}?pin=${game.pin}&host=true`);
+    try {
+      console.log('HostGame: Starting game with PIN:', game.pin);
+      const success = gameManager.startGame(game.pin);
+      if (success) {
+        console.log('HostGame: Game started successfully, navigating to play page');
+        navigate(`/play/${quizId}?pin=${game.pin}&host=true`);
+      } else {
+        console.error('HostGame: Failed to start game');
+        toast({ title: "Failed to start game", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('HostGame: Error starting game:', error);
+      toast({ title: "Error starting game", description: error.message, variant: "destructive" });
     }
   };
 
-  if (!quiz || !game) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center">
         <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-8">
           <div className="flex items-center space-x-4">
             <div className="w-8 h-8 border-4 border-white/30 rounded-full animate-spin border-t-white"></div>
             <div className="text-white text-xl font-semibold">Setting up your quiz room...</div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!quiz || !game) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center">
+        <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-white mb-4">Failed to Load Quiz</h2>
+            <p className="text-white/80 mb-4">There was an error loading your quiz session.</p>
+            <Button onClick={() => navigate('/')} className="bg-white/20 hover:bg-white/30 text-white">
+              Back to Home
+            </Button>
           </div>
         </Card>
       </div>
@@ -132,7 +209,7 @@ const HostGame = () => {
                     min="100"
                     max="5000"
                     step="100"
-                    className="bg-white/10 border-white/30 text-white"
+                    className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
                   />
                   <p className="text-sm text-white/60 mt-1 flex items-center gap-1">
                     <Zap className="w-4 h-4" />
@@ -169,7 +246,7 @@ const HostGame = () => {
                 </div>
                 
                 <div className="bg-white/10 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-yellow-300">{quiz.questions[0]?.points || 1000}</div>
+                  <div className="text-xl font-bold text-yellow-300">{quiz.questions[0]?.points || customPoints}</div>
                   <div className="text-white/60 text-sm">Points per Question</div>
                 </div>
                 
