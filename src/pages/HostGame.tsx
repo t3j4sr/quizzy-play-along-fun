@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, Play, BarChart3, Trophy, Settings, Zap, Crown, Sparkles } from 'lucide-react';
+import { Users, Play, BarChart3, Trophy, Settings, Zap, Crown, Sparkles, UserX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { gameManager } from '@/lib/gameManager';
 import { useGameState } from '@/hooks/useGameState';
@@ -20,7 +20,7 @@ const HostGame = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  const { game, connect } = useGameState({ 
+  const { game, connect, removePlayer } = useGameState({ 
     pin: gameSession?.pin,
     autoConnect: false 
   });
@@ -44,7 +44,6 @@ const HostGame = () => {
             parsedQuiz = JSON.parse(savedQuiz);
             console.log('HostGame: Parsed quiz from localStorage:', parsedQuiz);
             
-            // Store in Supabase for cross-device access
             try {
               const supabaseQuiz = await gameManager.createQuiz({
                 title: parsedQuiz.title,
@@ -56,15 +55,12 @@ const HostGame = () => {
                 createdBy: 'host'
               });
               
-              // Update quizId to use the Supabase ID
               parsedQuiz = supabaseQuiz;
             } catch (supabaseError) {
               console.log('HostGame: Quiz might already exist in Supabase, trying to fetch...');
-              // Try to get existing quiz
               parsedQuiz = await gameManager.getQuiz(quizId) || parsedQuiz;
             }
           } else {
-            // Try to load from Supabase
             parsedQuiz = await gameManager.getQuiz(quizId);
             console.log('HostGame: Loaded quiz from Supabase:', parsedQuiz);
           }
@@ -75,13 +71,11 @@ const HostGame = () => {
           
           setQuiz(parsedQuiz);
           
-          // Create a new game session
           console.log('HostGame: Creating game session');
           const newGameSession = await gameManager.createGameSession(parsedQuiz.id);
           console.log('HostGame: Created game session:', newGameSession);
           setGameSession(newGameSession);
           
-          // Connect to track real-time updates
           console.log('HostGame: Connecting to game session');
           connect(newGameSession.pin);
           
@@ -110,7 +104,6 @@ const HostGame = () => {
         questions: quiz.questions.map(q => ({ ...q, points: customPoints }))
       };
       
-      // Update in Supabase
       await gameManager.updateQuiz(quiz.id, updatedQuiz);
       setQuiz(updatedQuiz);
       
@@ -118,6 +111,17 @@ const HostGame = () => {
     } catch (error) {
       console.error('HostGame: Error updating points:', error);
       toast({ title: "Failed to update points", variant: "destructive" });
+    }
+  };
+
+  const handleRemovePlayer = async (playerId: string) => {
+    if (!game) return;
+    
+    try {
+      await removePlayer(game.pin, playerId);
+    } catch (error) {
+      console.error('HostGame: Error removing player:', error);
+      toast({ title: "Failed to remove player", variant: "destructive" });
     }
   };
 
@@ -282,7 +286,7 @@ const HostGame = () => {
                   <Users className="h-5 w-5 text-white/80" />
                   Players Joined ({game.players.length})
                   {game.players.length > 0 && (
-                    <Badge className="bg-white text-black ml-2 animate-pulse">
+                    <Badge className="bg-green-500/20 text-green-400 ml-2 animate-pulse border border-green-500/30">
                       LIVE
                     </Badge>
                   )}
@@ -329,10 +333,20 @@ const HostGame = () => {
                               </p>
                             </div>
                           </div>
-                          <Trophy className="h-6 w-6 text-white/60" />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemovePlayer(player.id)}
+                            className="bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30 h-8 w-8 p-0"
+                          >
+                            <UserX className="h-4 w-4" />
+                          </Button>
                         </div>
                         <div className="bg-white/10 rounded-lg p-2 text-center border border-white/20">
-                          <span className="text-sm text-white/80">Ready to play!</span>
+                          <span className="text-sm text-white/80 flex items-center justify-center gap-1">
+                            <Trophy className="h-4 w-4" />
+                            Ready to play!
+                          </span>
                         </div>
                       </div>
                     ))}

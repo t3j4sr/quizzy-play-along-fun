@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { gameManager, type GameSession, type Player, type Quiz } from '@/lib/gameManager';
 import { realtimeManager } from '@/lib/realtimeManager';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UseGameStateOptions {
   pin?: string;
@@ -31,6 +32,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
   });
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const channelRef = useRef<any>(null);
 
   // Connect to game with real-time updates
   const connect = useCallback(async (gamePin: string) => {
@@ -60,7 +62,40 @@ export function useGameState(options: UseGameStateOptions = {}) {
         isLoading: false
       }));
 
-      // Subscribe to real-time updates
+      // Subscribe to real-time updates from Supabase
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+
+      channelRef.current = supabase
+        .channel(`game_${gamePin}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'game_sessions',
+            filter: `pin=eq.${gamePin}`
+          },
+          async (payload) => {
+            console.log('Real-time update received:', payload);
+            
+            // Refresh game state
+            const updatedGame = await gameManager.getGameByPin(gamePin);
+            if (updatedGame) {
+              setState(prev => ({
+                ...prev,
+                game: updatedGame,
+                currentPlayer: playerId 
+                  ? updatedGame.players.find(p => p.id === playerId) || prev.currentPlayer
+                  : prev.currentPlayer
+              }));
+            }
+          }
+        )
+        .subscribe();
+
+      // Also subscribe to localStorage events for cross-tab communication
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
@@ -84,6 +119,11 @@ export function useGameState(options: UseGameStateOptions = {}) {
             case 'player_joined':
               if (event.payload.id !== playerId) {
                 toast({ title: `${event.payload.name} joined the game!` });
+              }
+              break;
+            case 'player_left':
+              if (event.payload.playerId !== playerId) {
+                toast({ title: 'A player left the game' });
               }
               break;
             case 'game_started':
@@ -114,6 +154,11 @@ export function useGameState(options: UseGameStateOptions = {}) {
       unsubscribeRef.current = null;
     }
 
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     setState({
       game: null,
       quiz: null,
@@ -139,6 +184,15 @@ export function useGameState(options: UseGameStateOptions = {}) {
       });
       return null;
     }
+  }, []);
+
+  // Remove player from game (for host)
+  const removePlayer = useCallback(async (gamePin: string, playerId: string) => {
+    const success = await gameManager.removePlayerFromGame(gamePin, playerId);
+    if (success) {
+      toast({ title: 'Player removed from game' });
+    }
+    return success;
   }, []);
 
   // Start game (host only)
@@ -183,6 +237,9 @@ export function useGameState(options: UseGameStateOptions = {}) {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
     };
   }, [pin, autoConnect, connect, state.isConnected, state.isLoading]);
 
@@ -191,6 +248,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
     connect,
     disconnect,
     joinGame,
+    removePlayer,
     startGame,
     submitAnswer,
     getLeaderboard,

@@ -1,4 +1,3 @@
-
 import { realtimeManager } from './realtimeManager';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -58,7 +57,7 @@ class GameManager {
       .insert({
         title: quiz.title,
         description: quiz.description,
-        questions: quiz.questions,
+        questions: quiz.questions as any,
         created_by: quiz.createdBy
       })
       .select()
@@ -73,7 +72,7 @@ class GameManager {
       id: data.id,
       title: data.title,
       description: data.description || '',
-      questions: data.questions,
+      questions: data.questions as Question[],
       createdAt: new Date(data.created_at).getTime(),
       createdBy: data.created_by
     };
@@ -109,7 +108,7 @@ class GameManager {
         id: data.id,
         title: data.title,
         description: data.description || '',
-        questions: data.questions,
+        questions: data.questions as Question[],
         createdAt: new Date(data.created_at).getTime(),
         createdBy: data.created_by
       };
@@ -128,7 +127,7 @@ class GameManager {
         .update({
           title: updatedQuiz.title,
           description: updatedQuiz.description,
-          questions: updatedQuiz.questions
+          questions: updatedQuiz.questions as any
         })
         .eq('id', quizId);
 
@@ -179,9 +178,9 @@ class GameManager {
       id: data.id,
       quizId: data.quiz_id,
       pin: data.pin,
-      status: data.status,
+      status: data.status as 'waiting' | 'playing' | 'finished',
       currentQuestionIndex: data.current_question_index,
-      players: data.players || [],
+      players: (data.players as any[]) || [],
       createdAt: new Date(data.created_at).getTime(),
       startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
       finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
@@ -199,13 +198,7 @@ class GameManager {
   async getGameByPin(pin: string): Promise<GameSession | null> {
     console.log('GameManager: Getting game by PIN:', pin);
     
-    // Check memory first
-    let game = this.games.get(pin);
-    if (game) {
-      return game;
-    }
-
-    // Fetch from Supabase
+    // Always fetch fresh data from Supabase for real-time updates
     const { data, error } = await supabase
       .from('game_sessions')
       .select('*')
@@ -218,13 +211,13 @@ class GameManager {
     }
 
     if (data) {
-      game = {
+      const game: GameSession = {
         id: data.id,
         quizId: data.quiz_id,
         pin: data.pin,
-        status: data.status,
+        status: data.status as 'waiting' | 'playing' | 'finished',
         currentQuestionIndex: data.current_question_index,
-        players: data.players || [],
+        players: (data.players as any[]) || [],
         createdAt: new Date(data.created_at).getTime(),
         startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
         finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
@@ -271,7 +264,7 @@ class GameManager {
     // Update in Supabase
     const { error } = await supabase
       .from('game_sessions')
-      .update({ players: updatedPlayers })
+      .update({ players: updatedPlayers as any })
       .eq('pin', pin);
 
     if (error) {
@@ -290,6 +283,38 @@ class GameManager {
     }, 100);
     
     return { success: true, player };
+  }
+
+  async removePlayerFromGame(pin: string, playerId: string): Promise<boolean> {
+    console.log('GameManager: Removing player from game:', pin, playerId);
+    
+    const game = await this.getGameByPin(pin);
+    if (!game) {
+      return false;
+    }
+
+    const updatedPlayers = game.players.filter(p => p.id !== playerId);
+
+    // Update in Supabase
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({ players: updatedPlayers as any })
+      .eq('pin', pin);
+
+    if (error) {
+      console.error('GameManager: Error removing player:', error);
+      return false;
+    }
+
+    game.players = updatedPlayers;
+    this.games.set(pin, game);
+    
+    // Emit real-time event
+    setTimeout(() => {
+      realtimeManager.playerLeft(pin, playerId);
+    }, 100);
+    
+    return true;
   }
 
   // Game Flow
@@ -378,7 +403,7 @@ class GameManager {
     // Update in Supabase
     const { error } = await supabase
       .from('game_sessions')
-      .update({ players: game.players })
+      .update({ players: game.players as any })
       .eq('pin', pin);
 
     if (error) {
@@ -500,7 +525,6 @@ class GameManager {
     };
   }
 
-  // Utility methods
   private generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
@@ -509,14 +533,11 @@ class GameManager {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  // Initialize from localStorage for backward compatibility
   async initialize(): Promise<void> {
     console.log('GameManager: Initializing...');
-    // No need to load from localStorage anymore, Supabase handles persistence
   }
 }
 
 export const gameManager = new GameManager();
 
-// Initialize on module load
 gameManager.initialize();
