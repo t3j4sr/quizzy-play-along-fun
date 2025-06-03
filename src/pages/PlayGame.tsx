@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -35,6 +34,24 @@ const PlayGame = () => {
     pin: pin || undefined,
     playerId: playerId || undefined 
   });
+
+  // Monitor game status changes for real-time updates
+  useEffect(() => {
+    console.log('Game status changed:', { 
+      status: game?.status, 
+      isGameActive, 
+      currentQuestionIndex: game?.currentQuestionIndex,
+      playerName: currentPlayer?.name 
+    });
+
+    // If game becomes active and we're a player, ensure we're in the right state
+    if (isGameActive && !isHost && currentPlayer) {
+      console.log('Game is now active for player:', currentPlayer.name);
+      setGamePhase('question');
+      setIsAnswered(false);
+      setSelectedAnswer(null);
+    }
+  }, [game?.status, isGameActive, currentPlayer, isHost]);
 
   useEffect(() => {
     if (!game || !currentQuestion) return;
@@ -104,10 +121,45 @@ const PlayGame = () => {
     return "bg-gray-500 text-gray-300 border border-gray-400";
   };
 
-  if (!game || !quiz || !currentQuestion) {
+  // Show loading if game/quiz not loaded yet
+  if (!game || !quiz) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <div className="text-white text-xl">Loading game...</div>
+        <div className="text-white text-xl">
+          {!game ? 'Connecting to game...' : 'Loading quiz...'}
+        </div>
+      </div>
+    );
+  }
+
+  // If game is waiting and we're a player, show waiting screen
+  if (game.status === 'waiting' && !isHost) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
+          <CardContent className="text-center py-12">
+            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/30">
+              <Clock className="h-10 w-10 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-4">Waiting for host to start...</h2>
+            <p className="text-white/70 mb-6">
+              {currentPlayer?.name}, you're ready to play!
+            </p>
+            <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+              <p className="text-white/80">Game PIN: <span className="font-bold text-xl">{game.pin}</span></p>
+              <p className="text-white/60 text-sm mt-2">{game.players.length} players joined</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If no current question available yet, show loading
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
+        <div className="text-white text-xl">Loading question...</div>
       </div>
     );
   }

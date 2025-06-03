@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gameManager, type GameSession, type Player, type Quiz } from '@/lib/gameManager';
 import { realtimeManager } from '@/lib/realtimeManager';
@@ -45,6 +44,8 @@ export function useGameState(options: UseGameStateOptions = {}) {
           : null;
 
         console.log('Updated game data:', { 
+          status: game.status,
+          currentQuestionIndex: game.currentQuestionIndex,
           playerCount: game.players.length, 
           players: game.players.map(p => p.name),
           currentPlayer: currentPlayer?.name 
@@ -97,7 +98,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
         unsubscribeRef.current();
       }
 
-      // Subscribe to Supabase real-time updates
+      // Subscribe to Supabase real-time updates with better event handling
       channelRef.current = supabase
         .channel(`game_${gamePin}`)
         .on(
@@ -109,9 +110,19 @@ export function useGameState(options: UseGameStateOptions = {}) {
             filter: `pin=eq.${gamePin}`
           },
           async (payload) => {
-            console.log('Supabase real-time update:', payload);
-            // Refresh game data when any change occurs
-            await refreshGameData(gamePin);
+            console.log('Supabase real-time update received:', payload);
+            
+            // Immediate refresh for critical state changes
+            if (payload.eventType === 'UPDATE') {
+              const newData = payload.new as any;
+              console.log('Game state changed:', {
+                status: newData.status,
+                currentQuestionIndex: newData.current_question_index
+              });
+              
+              // Force immediate refresh
+              await refreshGameData(gamePin);
+            }
           }
         )
         .subscribe((status) => {
@@ -122,7 +133,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
       const unsubscribe = realtimeManager.subscribe(gamePin, async (event) => {
         console.log('RealtimeManager event received:', event);
         
-        // Refresh game data from Supabase
+        // Immediate refresh for game state changes
         await refreshGameData(gamePin);
 
         // Show toast notifications for events
@@ -138,7 +149,10 @@ export function useGameState(options: UseGameStateOptions = {}) {
             }
             break;
           case 'game_started':
+            console.log('Game started event received - refreshing immediately');
             toast({ title: 'Game is starting!' });
+            // Force immediate refresh when game starts
+            setTimeout(() => refreshGameData(gamePin), 100);
             break;
           case 'question_started':
             toast({ title: `Question ${event.payload.questionIndex + 1} started!` });
@@ -148,10 +162,10 @@ export function useGameState(options: UseGameStateOptions = {}) {
 
       unsubscribeRef.current = unsubscribe;
 
-      // Set up periodic refresh as fallback
+      // Set up more frequent refresh for active games
       const intervalId = setInterval(() => {
         refreshGameData(gamePin);
-      }, 3000); // Refresh every 3 seconds
+      }, 2000); // Refresh every 2 seconds for active games
 
       // Clean up interval on unmount
       const originalUnsubscribe = unsubscribeRef.current;
@@ -169,7 +183,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
     }
   }, [playerId, refreshGameData]);
 
-  // Disconnect from game
   const disconnect = useCallback(() => {
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
@@ -191,7 +204,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
     });
   }, []);
 
-  // Join game as player
   const joinGame = useCallback(async (gamePin: string, playerName: string) => {
     const result = await gameManager.addPlayerToGame(gamePin, playerName);
     
@@ -201,7 +213,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
       // Force immediate refresh after joining
       setTimeout(() => {
         refreshGameData(gamePin);
-      }, 500);
+      }, 300);
       
       return result.player;
     } else {
@@ -214,31 +226,31 @@ export function useGameState(options: UseGameStateOptions = {}) {
     }
   }, [refreshGameData]);
 
-  // Remove player from game (for host)
   const removePlayer = useCallback(async (gamePin: string, playerId: string) => {
     const success = await gameManager.removePlayerFromGame(gamePin, playerId);
     if (success) {
       toast({ title: 'Player removed from game' });
-      // Force immediate refresh after removing
       setTimeout(() => {
         refreshGameData(gamePin);
-      }, 500);
+      }, 300);
     }
     return success;
   }, [refreshGameData]);
 
-  // Start game (host only)
   const startGame = useCallback(async () => {
     if (!state.game) return false;
 
     const success = await gameManager.startGame(state.game.pin);
     if (success) {
       toast({ title: 'Game started!' });
+      // Force immediate refresh
+      setTimeout(() => {
+        refreshGameData(state.game.pin);
+      }, 100);
     }
     return success;
-  }, [state.game]);
+  }, [state.game, refreshGameData]);
 
-  // Submit answer
   const submitAnswer = useCallback(async (questionId: string, answerId: string, timeSpent: number) => {
     if (!state.game || !state.currentPlayer) return false;
 
@@ -253,7 +265,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
     return success;
   }, [state.game, state.currentPlayer]);
 
-  // Get leaderboard
   const getLeaderboard = useCallback(() => {
     if (!state.game) return [];
     return gameManager.getLeaderboard(state.game.pin);
