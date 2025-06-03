@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, Play, BarChart3, Trophy, Settings, Zap, Crown, Sparkles, UserX } from 'lucide-react';
+import { Users, Play, BarChart3, Trophy, Settings, Zap, Crown, Sparkles, UserX, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { gameManager } from '@/lib/gameManager';
 import { useGameState } from '@/hooks/useGameState';
@@ -20,7 +19,7 @@ const HostGame = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  const { game, connect, removePlayer } = useGameState({ 
+  const { game, connect, removePlayer, refreshGameData } = useGameState({ 
     pin: gameSession?.pin,
     autoConnect: false 
   });
@@ -123,6 +122,12 @@ const HostGame = () => {
       console.error('HostGame: Error removing player:', error);
       toast({ title: "Failed to remove player", variant: "destructive" });
     }
+  };
+
+  const handleRefresh = async () => {
+    console.log('Manual refresh triggered');
+    await refreshGameData();
+    toast({ title: "Refreshed player list!" });
   };
 
   const startGame = async () => {
@@ -265,6 +270,15 @@ const HostGame = () => {
                   <div className="text-xl font-bold text-white">{quiz.questions[0]?.points || customPoints}</div>
                   <div className="text-white/60 text-sm">Points per Question</div>
                 </div>
+
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Players
+                </Button>
                 
                 <Button
                   onClick={startGame}

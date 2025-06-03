@@ -34,6 +34,33 @@ export function useGameState(options: UseGameStateOptions = {}) {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const channelRef = useRef<any>(null);
 
+  // Force refresh game data
+  const refreshGameData = useCallback(async (gamePin: string) => {
+    console.log('Refreshing game data for PIN:', gamePin);
+    try {
+      const game = await gameManager.getGameByPin(gamePin);
+      if (game) {
+        const currentPlayer = playerId 
+          ? game.players.find(p => p.id === playerId) || null
+          : null;
+
+        console.log('Updated game data:', { 
+          playerCount: game.players.length, 
+          players: game.players.map(p => p.name),
+          currentPlayer: currentPlayer?.name 
+        });
+
+        setState(prev => ({
+          ...prev,
+          game,
+          currentPlayer
+        }));
+      }
+    } catch (error) {
+      console.error('Error refreshing game data:', error);
+    }
+  }, [playerId]);
+
   // Connect to game with real-time updates
   const connect = useCallback(async (gamePin: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
@@ -62,81 +89,76 @@ export function useGameState(options: UseGameStateOptions = {}) {
         isLoading: false
       }));
 
-      // Subscribe to real-time updates from Supabase
+      // Clean up existing subscriptions
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
 
+      // Subscribe to Supabase real-time updates
       channelRef.current = supabase
         .channel(`game_${gamePin}`)
         .on(
           'postgres_changes',
           {
-            event: 'UPDATE',
+            event: '*',
             schema: 'public',
             table: 'game_sessions',
             filter: `pin=eq.${gamePin}`
           },
           async (payload) => {
-            console.log('Real-time update received:', payload);
-            
-            // Refresh game state
-            const updatedGame = await gameManager.getGameByPin(gamePin);
-            if (updatedGame) {
-              setState(prev => ({
-                ...prev,
-                game: updatedGame,
-                currentPlayer: playerId 
-                  ? updatedGame.players.find(p => p.id === playerId) || prev.currentPlayer
-                  : prev.currentPlayer
-              }));
-            }
+            console.log('Supabase real-time update:', payload);
+            // Refresh game data when any change occurs
+            await refreshGameData(gamePin);
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Supabase subscription status:', status);
+        });
 
-      // Also subscribe to localStorage events for cross-tab communication
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-
+      // Subscribe to localStorage events for same-device updates
       const unsubscribe = realtimeManager.subscribe(gamePin, async (event) => {
-        console.log('Real-time event received:', event);
+        console.log('RealtimeManager event received:', event);
         
-        // Refresh game state from Supabase
-        const updatedGame = await gameManager.getGameByPin(gamePin);
-        if (updatedGame) {
-          setState(prev => ({
-            ...prev,
-            game: updatedGame,
-            currentPlayer: playerId 
-              ? updatedGame.players.find(p => p.id === playerId) || prev.currentPlayer
-              : prev.currentPlayer
-          }));
+        // Refresh game data from Supabase
+        await refreshGameData(gamePin);
 
-          // Show toast notifications for events
-          switch (event.type) {
-            case 'player_joined':
-              if (event.payload.id !== playerId) {
-                toast({ title: `${event.payload.name} joined the game!` });
-              }
-              break;
-            case 'player_left':
-              if (event.payload.playerId !== playerId) {
-                toast({ title: 'A player left the game' });
-              }
-              break;
-            case 'game_started':
-              toast({ title: 'Game is starting!' });
-              break;
-            case 'question_started':
-              toast({ title: `Question ${event.payload.questionIndex + 1} started!` });
-              break;
-          }
+        // Show toast notifications for events
+        switch (event.type) {
+          case 'player_joined':
+            if (event.payload.id !== playerId) {
+              toast({ title: `${event.payload.name} joined the game!` });
+            }
+            break;
+          case 'player_left':
+            if (event.payload.playerId !== playerId) {
+              toast({ title: 'A player left the game' });
+            }
+            break;
+          case 'game_started':
+            toast({ title: 'Game is starting!' });
+            break;
+          case 'question_started':
+            toast({ title: `Question ${event.payload.questionIndex + 1} started!` });
+            break;
         }
       });
 
       unsubscribeRef.current = unsubscribe;
+
+      // Set up periodic refresh as fallback
+      const intervalId = setInterval(() => {
+        refreshGameData(gamePin);
+      }, 3000); // Refresh every 3 seconds
+
+      // Clean up interval on unmount
+      const originalUnsubscribe = unsubscribeRef.current;
+      unsubscribeRef.current = () => {
+        clearInterval(intervalId);
+        originalUnsubscribe();
+      };
 
     } catch (error) {
       setState(prev => ({
@@ -145,7 +167,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
         isLoading: false
       }));
     }
-  }, [playerId]);
+  }, [playerId, refreshGameData]);
 
   // Disconnect from game
   const disconnect = useCallback(() => {
@@ -175,6 +197,12 @@ export function useGameState(options: UseGameStateOptions = {}) {
     
     if (result.success && result.player) {
       toast({ title: `Welcome ${playerName}! You've joined the game.` });
+      
+      // Force immediate refresh after joining
+      setTimeout(() => {
+        refreshGameData(gamePin);
+      }, 500);
+      
       return result.player;
     } else {
       toast({ 
@@ -184,16 +212,20 @@ export function useGameState(options: UseGameStateOptions = {}) {
       });
       return null;
     }
-  }, []);
+  }, [refreshGameData]);
 
   // Remove player from game (for host)
   const removePlayer = useCallback(async (gamePin: string, playerId: string) => {
     const success = await gameManager.removePlayerFromGame(gamePin, playerId);
     if (success) {
       toast({ title: 'Player removed from game' });
+      // Force immediate refresh after removing
+      setTimeout(() => {
+        refreshGameData(gamePin);
+      }, 500);
     }
     return success;
-  }, []);
+  }, [refreshGameData]);
 
   // Start game (host only)
   const startGame = useCallback(async () => {
@@ -252,6 +284,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
     startGame,
     submitAnswer,
     getLeaderboard,
+    refreshGameData: () => pin ? refreshGameData(pin) : Promise.resolve(),
     // Computed values
     isHost: Boolean(state.game && !playerId),
     canStart: Boolean(state.game && state.game.status === 'waiting' && state.game.players.length > 0),
