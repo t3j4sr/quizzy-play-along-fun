@@ -17,7 +17,7 @@ export function HostLeaderboard({ players, currentQuestionIndex, totalQuestions,
   const [answeredCount, setAnsweredCount] = useState(0);
 
   useEffect(() => {
-    // Sort players by score
+    // Sort players by score in descending order
     const sorted = [...players].sort((a, b) => b.score - a.score);
     setSortedPlayers(sorted);
 
@@ -27,6 +27,13 @@ export function HostLeaderboard({ players, currentQuestionIndex, totalQuestions,
       player.answers.some(answer => answer.questionId === currentQuestionId)
     ).length;
     setAnsweredCount(answered);
+
+    console.log('HostLeaderboard: Updated stats -', {
+      totalPlayers: players.length,
+      answeredCount: answered,
+      topPlayer: sorted[0]?.name,
+      topScore: sorted[0]?.score
+    });
   }, [players, currentQuestionIndex]);
 
   const getPositionIcon = (index: number) => {

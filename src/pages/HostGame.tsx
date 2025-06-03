@@ -1,406 +1,311 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Users, Play, BarChart3, Trophy, Settings, Zap, Crown, Sparkles, UserX, RefreshCw } from 'lucide-react';
+import { Copy, Users, ArrowLeft, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { gameManager } from '@/lib/gameManager';
 import { useGameState } from '@/hooks/useGameState';
+import { HostLeaderboard } from '@/components/HostLeaderboard';
+import { HostGameControl } from '@/components/HostGameControl';
 
 const HostGame = () => {
   const { quizId } = useParams();
   const navigate = useNavigate();
-  const [quiz, setQuiz] = useState(null);
-  const [gameSession, setGameSession] = useState(null);
-  const [customPoints, setCustomPoints] = useState(1000);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  const { game, connect, removePlayer, refreshGameData } = useGameState({ 
-    pin: gameSession?.pin,
+  const [timeLeft, setTimeLeft] = useState(30);
+
+  const { 
+    game, 
+    quiz, 
+    startGame, 
+    canStart, 
+    currentQuestion, 
+    isGameActive, 
+    isGameFinished,
+    refreshGameData
+  } = useGameState({ 
+    pin: game?.pin, 
     autoConnect: false 
   });
 
+  // Load quiz and create game session
   useEffect(() => {
-    console.log('HostGame: Starting initialization with quizId:', quizId);
-    
-    if (quizId) {
-      setIsLoading(true);
-      setError(null);
-      
-      const initializeQuiz = async () => {
-        try {
-          // First, try to load the quiz from localStorage for backward compatibility
-          const savedQuiz = localStorage.getItem(`quiz_${quizId}`);
-          console.log('HostGame: Loaded quiz from storage:', savedQuiz ? 'found' : 'not found');
-          
-          let parsedQuiz = null;
-          
-          if (savedQuiz) {
-            parsedQuiz = JSON.parse(savedQuiz);
-            console.log('HostGame: Parsed quiz from localStorage:', parsedQuiz);
-            
-            try {
-              const supabaseQuiz = await gameManager.createQuiz({
-                title: parsedQuiz.title,
-                description: parsedQuiz.description || '',
-                questions: parsedQuiz.questions.map(q => ({
-                  ...q,
-                  points: q.points || 1000
-                })),
-                createdBy: 'host'
-              });
-              
-              parsedQuiz = supabaseQuiz;
-            } catch (supabaseError) {
-              console.log('HostGame: Quiz might already exist in Supabase, trying to fetch...');
-              parsedQuiz = await gameManager.getQuiz(quizId) || parsedQuiz;
-            }
-          } else {
-            parsedQuiz = await gameManager.getQuiz(quizId);
-            console.log('HostGame: Loaded quiz from Supabase:', parsedQuiz);
-          }
-          
-          if (!parsedQuiz || !parsedQuiz.questions || !Array.isArray(parsedQuiz.questions)) {
-            throw new Error('Quiz not found or invalid format');
-          }
-          
-          setQuiz(parsedQuiz);
-          
-          console.log('HostGame: Creating game session');
-          const newGameSession = await gameManager.createGameSession(parsedQuiz.id);
-          console.log('HostGame: Created game session:', newGameSession);
-          setGameSession(newGameSession);
-          
-          console.log('HostGame: Connecting to game session');
-          connect(newGameSession.pin);
-          
-          setIsLoading(false);
-        } catch (error) {
-          console.error('HostGame: Error during initialization:', error);
-          setError(error.message);
-          setIsLoading(false);
-          toast({ title: "Failed to load quiz", description: error.message, variant: "destructive" });
-        }
-      };
-      
-      initializeQuiz();
-    }
-  }, [quizId, navigate, connect]);
-
-  const updateQuestionPoints = async () => {
-    if (!quiz || !customPoints) {
-      toast({ title: "Please enter valid points value", variant: "destructive" });
-      return;
-    }
-    
-    try {
-      const updatedQuiz = {
-        ...quiz,
-        questions: quiz.questions.map(q => ({ ...q, points: customPoints }))
-      };
-      
-      await gameManager.updateQuiz(quiz.id, updatedQuiz);
-      setQuiz(updatedQuiz);
-      
-      toast({ title: `All questions now worth ${customPoints} points!` });
-    } catch (error) {
-      console.error('HostGame: Error updating points:', error);
-      toast({ title: "Failed to update points", variant: "destructive" });
-    }
-  };
-
-  const handleRemovePlayer = async (playerId: string) => {
-    if (!game) return;
-    
-    try {
-      await removePlayer(game.pin, playerId);
-    } catch (error) {
-      console.error('HostGame: Error removing player:', error);
-      toast({ title: "Failed to remove player", variant: "destructive" });
-    }
-  };
-
-  const handleRefresh = async () => {
-    console.log('Manual refresh triggered');
-    await refreshGameData();
-    toast({ title: "Refreshed player list!" });
-  };
-
-  const startGame = async () => {
-    if (!game || game.players.length === 0) {
-      toast({ title: "Need at least one player to start", variant: "destructive" });
-      return;
-    }
-    
-    try {
-      console.log('HostGame: Starting game with PIN:', game.pin);
-      const success = await gameManager.startGame(game.pin);
-      if (success) {
-        console.log('HostGame: Game started successfully, navigating to play page');
-        navigate(`/play/${quiz.id}?pin=${game.pin}&host=true`);
-      } else {
-        console.error('HostGame: Failed to start game');
-        toast({ title: "Failed to start game", variant: "destructive" });
+    const loadQuiz = async () => {
+      if (!quizId) {
+        toast({ title: 'Quiz ID is required', variant: 'destructive' });
+        navigate('/');
+        return;
       }
-    } catch (error) {
-      console.error('HostGame: Error starting game:', error);
-      toast({ title: "Error starting game", description: error.message, variant: "destructive" });
+
+      // Try to load from localStorage first
+      const savedQuiz = localStorage.getItem(`quiz_${quizId}`);
+      if (!savedQuiz) {
+        toast({ title: 'Quiz not found', variant: 'destructive' });
+        navigate('/');
+        return;
+      }
+
+      try {
+        const quizData = JSON.parse(savedQuiz);
+        console.log('HostGame: Loaded quiz:', quizData.title);
+        
+        // Create game session using gameManager
+        const { gameManager } = await import('@/lib/gameManager');
+        
+        // First create quiz in Supabase
+        const createdQuiz = await gameManager.createQuiz({
+          title: quizData.title,
+          description: quizData.description || '',
+          questions: quizData.questions.map(q => ({
+            ...q,
+            points: 1000 // Default points
+          })),
+          createdBy: 'host'
+        });
+
+        // Then create game session
+        const gameSession = await gameManager.createGameSession(createdQuiz.id);
+        console.log('HostGame: Created game session with PIN:', gameSession.pin);
+        
+        // Connect to the game
+        const { connect } = await import('@/hooks/useGameState');
+        // The useGameState hook will handle the connection
+        
+      } catch (error) {
+        console.error('HostGame: Error setting up game:', error);
+        toast({ title: 'Failed to setup game', variant: 'destructive' });
+      }
+    };
+
+    loadQuiz();
+  }, [quizId, navigate]);
+
+  const handleStartGame = async () => {
+    console.log('HostGame: Starting game...');
+    const success = await startGame();
+    if (success) {
+      toast({ title: 'Game started! Players can now answer questions.' });
+      // Set initial timer when game starts
+      if (currentQuestion) {
+        setTimeLeft(currentQuestion.timeLimit);
+      }
+    } else {
+      toast({ title: 'Failed to start game', variant: 'destructive' });
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <Card className="bg-black/50 backdrop-blur-xl border border-white/20 p-8 shadow-2xl">
-          <div className="flex items-center space-x-4">
-            <div className="w-8 h-8 border-4 border-white/30 rounded-full animate-spin border-t-white"></div>
-            <div className="text-white text-xl font-semibold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              Setting up your quiz room...
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  const copyGamePin = () => {
+    if (game?.pin) {
+      navigator.clipboard.writeText(game.pin);
+      toast({ title: 'Game PIN copied to clipboard!' });
+    }
+  };
 
-  if (error || !quiz || !game) {
+  const handleQuestionComplete = async () => {
+    console.log('HostGame: Question completed, refreshing data...');
+    await refreshGameData();
+    
+    // Reset timer for next question
+    if (currentQuestion) {
+      setTimeLeft(currentQuestion.timeLimit);
+    }
+  };
+
+  if (!game || !quiz) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <Card className="bg-black/50 backdrop-blur-xl border border-white/20 p-8 shadow-2xl">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-white mb-4">Failed to Load Quiz</h2>
-            <p className="text-white/80 mb-4">{error || 'There was an error loading your quiz session.'}</p>
-            <Button onClick={() => navigate('/')} className="bg-white/20 hover:bg-white/30 text-white border border-white/30">
-              Back to Home
-            </Button>
-          </div>
-        </Card>
+        <div className="text-white text-xl">Setting up your game...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800">
-      <div className="container mx-auto px-4 py-8">
-        {/* Enhanced Header with Mirror Effect */}
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="mb-6">
-            <Crown className="w-16 h-16 text-white mx-auto mb-4 animate-pulse drop-shadow-lg" />
-            <h1 className="text-6xl font-bold text-white mb-4 bg-gradient-to-r from-white via-gray-200 to-white bg-clip-text text-transparent drop-shadow-2xl">
-              {quiz.title}
-            </h1>
-            <p className="text-xl text-white/90 mb-6">{quiz.description}</p>
-          </div>
-          
-          <div className="inline-block bg-black/60 backdrop-blur-xl rounded-3xl p-8 border border-white/30 shadow-2xl">
-            <div className="flex items-center justify-center gap-3 mb-3">
-              <Sparkles className="w-6 h-6 text-white" />
-              <p className="text-white/80 text-lg font-medium">Game PIN</p>
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <p className="text-7xl font-bold text-white tracking-wider drop-shadow-lg bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              {game.pin}
-            </p>
-            <p className="text-white/60 text-sm mt-2">Share this PIN with your students</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4">
+      <div className="container mx-auto max-w-7xl">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate('/')}
+            className="text-white hover:bg-white/20 border border-white/20"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Home
+          </Button>
+          <h1 className="text-3xl font-bold text-white">{quiz.title}</h1>
+          <Button 
+            onClick={refreshGameData}
+            variant="outline"
+            className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Enhanced Game Settings with Mirror Effect */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl animate-scale-in">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <Settings className="h-5 w-5 text-white/80" />
-                  Quiz Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="points" className="text-white/80">Points per Question</Label>
-                  <Input
-                    id="points"
-                    type="number"
-                    value={customPoints}
-                    onChange={(e) => setCustomPoints(Number(e.target.value))}
-                    min="100"
-                    max="5000"
-                    step="100"
-                    className="bg-black/30 border-white/30 text-white placeholder:text-white/50 focus:border-white/50"
-                  />
-                  <p className="text-sm text-white/60 mt-1 flex items-center gap-1">
-                    <Zap className="w-4 h-4" />
-                    Faster answers get bonus points!
-                  </p>
-                </div>
-                <Button 
-                  onClick={updateQuestionPoints} 
-                  variant="outline" 
-                  className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
-                >
-                  Update All Questions
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <BarChart3 className="h-5 w-5 text-white/80" />
-                  Game Stats
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-black/30 rounded-lg p-3 text-center border border-white/10">
-                    <div className="text-2xl font-bold text-white">{quiz.questions.length}</div>
-                    <div className="text-white/60 text-sm">Questions</div>
-                  </div>
-                  <div className="bg-black/30 rounded-lg p-3 text-center border border-white/10">
-                    <div className="text-2xl font-bold text-white">{game.players.length}</div>
-                    <div className="text-white/60 text-sm">Players</div>
-                  </div>
-                </div>
-                
-                <div className="bg-black/30 rounded-lg p-3 text-center border border-white/10">
-                  <div className="text-xl font-bold text-white">{quiz.questions[0]?.points || customPoints}</div>
-                  <div className="text-white/60 text-sm">Points per Question</div>
-                </div>
-
+        {/* Game PIN */}
+        <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl mb-8">
+          <CardContent className="py-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-4">Game PIN</h2>
+              <div className="flex items-center justify-center gap-4">
+                <span className="text-6xl font-bold text-white tracking-wider">
+                  {game.pin}
+                </span>
                 <Button
-                  onClick={handleRefresh}
+                  onClick={copyGamePin}
                   variant="outline"
-                  className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+                  className="bg-black/30 border-white/30 text-white hover:bg-white/20"
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh Players
+                  <Copy className="h-4 w-4" />
                 </Button>
-                
-                <Button
-                  onClick={startGame}
-                  className="w-full h-12 bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black font-bold shadow-lg border border-white/30"
-                  disabled={game.players.length === 0}
-                >
-                  <Play className="h-5 w-5 mr-2" />
-                  Start Game ({game.players.length} players)
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              <p className="text-white/70 mt-4">
+                Players can join at your quiz website with this PIN
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Enhanced Players List with Mirror Effect */}
-          <div className="lg:col-span-2">
-            <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
-                  <Users className="h-5 w-5 text-white/80" />
-                  Players Joined ({game.players.length})
-                  {game.players.length > 0 && (
-                    <Badge className="bg-green-500/20 text-green-400 ml-2 animate-pulse border border-green-500/30">
-                      LIVE
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {game.players.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="relative mb-6">
-                      <Users className="h-20 w-20 text-white/30 mx-auto" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-24 h-24 border-2 border-white/20 rounded-full animate-ping"></div>
-                      </div>
-                    </div>
-                    <h3 className="text-2xl font-bold text-white mb-3">Waiting for Students</h3>
-                    <p className="text-white/70 text-lg mb-4">
-                      Students can join by entering PIN: <span className="font-bold text-white text-2xl">{game.pin}</span>
-                    </p>
-                    <div className="flex justify-center">
-                      <div className="flex space-x-2">
-                        <div className="w-3 h-3 bg-white/60 rounded-full animate-bounce"></div>
-                        <div className="w-3 h-3 bg-white/60 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                        <div className="w-3 h-3 bg-white/60 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                      </div>
-                    </div>
+        {/* Game Status */}
+        <div className="grid lg:grid-cols-3 gap-8 mb-8">
+          <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Users className="h-5 w-5" />
+                Players
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-white mb-2">
+                {game.players.length}
+              </div>
+              <div className="space-y-2">
+                {game.players.slice(0, 5).map(player => (
+                  <div key={player.id} className="text-white/70 text-sm">
+                    {player.name}
                   </div>
-                ) : (
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {game.players.map((player, index) => (
+                ))}
+                {game.players.length > 5 && (
+                  <div className="text-white/50 text-sm">
+                    +{game.players.length - 5} more...
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-white">Game Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Badge 
+                className={`text-lg px-4 py-2 ${
+                  game.status === 'waiting' 
+                    ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                    : game.status === 'playing'
+                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                    : 'bg-red-500/20 text-red-400 border-red-500/30'
+                }`}
+              >
+                {game.status === 'waiting' && 'Waiting to Start'}
+                {game.status === 'playing' && 'Game Active'}
+                {game.status === 'finished' && 'Game Finished'}
+              </Badge>
+              {game.status === 'waiting' && (
+                <Button
+                  onClick={handleStartGame}
+                  disabled={!canStart}
+                  className="w-full mt-4 bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black font-bold"
+                >
+                  {canStart ? 'Start Game' : 'Need at least 1 player'}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-white">Quiz Info</CardTitle>
+            </CardHeader>
+            <CardContent className="text-white/70">
+              <div className="space-y-2">
+                <div>Questions: {quiz.questions.length}</div>
+                {isGameActive && currentQuestion && (
+                  <div>Current: Question {(game.currentQuestionIndex || 0) + 1}</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Game Controls and Leaderboard */}
+        {isGameActive && currentQuestion && (
+          <div className="grid lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <HostGameControl
+                gamePin={game.pin}
+                currentQuestionIndex={game.currentQuestionIndex || 0}
+                totalQuestions={quiz.questions.length}
+                questionTimeLimit={currentQuestion.timeLimit}
+                onQuestionComplete={handleQuestionComplete}
+                timeLeft={timeLeft}
+                setTimeLeft={setTimeLeft}
+              />
+              
+              <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
+                <CardHeader>
+                  <CardTitle className="text-white">Current Question</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <h3 className="text-xl font-bold text-white mb-4">
+                    {currentQuestion.question}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {currentQuestion.answers.map((answer, index) => (
                       <div
-                        key={player.id}
-                        className="bg-gradient-to-r from-black/80 to-gray-800/80 backdrop-blur-sm rounded-xl p-4 text-white border border-white/20 shadow-lg animate-scale-in hover:scale-105 transition-transform"
-                        style={{ animationDelay: `${index * 100}ms` }}
+                        key={answer.id}
+                        className={`p-3 rounded-lg border ${
+                          answer.isCorrect
+                            ? 'bg-green-500/20 border-green-500/30 text-green-400'
+                            : 'bg-white/10 border-white/20 text-white/70'
+                        }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center border border-white/30">
-                              <span className="font-bold text-lg">{player.name.charAt(0).toUpperCase()}</span>
-                            </div>
-                            <div>
-                              <h3 className="font-bold text-lg">{player.name}</h3>
-                              <p className="text-white/70 text-sm">
-                                {new Date(player.joinedAt).toLocaleTimeString()}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRemovePlayer(player.id)}
-                            className="bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30 h-8 w-8 p-0"
-                          >
-                            <UserX className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="bg-white/10 rounded-lg p-2 text-center border border-white/20">
-                          <span className="text-sm text-white/80 flex items-center justify-center gap-1">
-                            <Trophy className="h-4 w-4" />
-                            Ready to play!
-                          </span>
-                        </div>
+                        <span className="font-bold">{String.fromCharCode(65 + index)}.</span> {answer.text}
                       </div>
                     ))}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
-            {/* Enhanced Instructions with Mirror Effect */}
-            <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl mt-6">
-              <CardHeader>
-                <CardTitle className="text-white">How Students Join</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-white/80">
-                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm font-bold border border-white/30">1</div>
-                      <span>Go to your quiz app</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-white/80">
-                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm font-bold border border-white/30">2</div>
-                      <span>Enter PIN: <strong className="text-white text-xl">{game.pin}</strong></span>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-white/80">
-                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm font-bold border border-white/30">3</div>
-                      <span>Enter their name</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-white/80">
-                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm font-bold border border-white/30">4</div>
-                      <span>Wait for you to start!</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <HostLeaderboard
+              players={game.players}
+              currentQuestionIndex={game.currentQuestionIndex || 0}
+              totalQuestions={quiz.questions.length}
+              timeLeft={timeLeft}
+            />
           </div>
-        </div>
+        )}
+
+        {/* Final Results */}
+        {isGameFinished && (
+          <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-white">Final Results</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HostLeaderboard
+                players={game.players}
+                currentQuestionIndex={game.currentQuestionIndex || 0}
+                totalQuestions={quiz.questions.length}
+                timeLeft={0}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

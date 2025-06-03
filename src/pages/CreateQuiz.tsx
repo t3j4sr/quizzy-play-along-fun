@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, ArrowLeft, Save, Play } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Save, Clock, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 
@@ -78,7 +78,6 @@ const CreateQuiz = () => {
       questions: [...prev.questions, newQuestion]
     }));
 
-    // Reset current question
     setCurrentQuestion({
       id: '',
       question: '',
@@ -131,7 +130,6 @@ const CreateQuiz = () => {
       return;
     }
 
-    // Save to localStorage for demo purposes
     const quizId = Date.now().toString();
     const savedQuiz = { ...quiz, id: quizId };
     localStorage.setItem(`quiz_${quizId}`, JSON.stringify(savedQuiz));
@@ -141,22 +139,24 @@ const CreateQuiz = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500">
+    <div className="min-h-screen bg-black">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <Button 
             variant="ghost" 
             onClick={() => navigate('/')}
-            className="text-white hover:bg-white/20"
+            className="text-white hover:bg-white/10 border border-white/20 shadow-lg hover:shadow-xl transition-all"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Home
           </Button>
-          <h1 className="text-3xl font-bold text-white">Create Your Quiz</h1>
+          <h1 className="text-4xl font-bold text-white drop-shadow-lg">
+            Create Your Quiz
+          </h1>
           <Button 
             onClick={saveQuiz}
-            className="bg-green-500 hover:bg-green-600 text-white"
+            className="bg-white text-black hover:bg-gray-100 shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
           >
             <Save className="h-4 w-4 mr-2" />
             Save Quiz
@@ -164,71 +164,87 @@ const CreateQuiz = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Quiz Info */}
+          {/* Quiz Info - 3D Card */}
           <div className="lg:col-span-1">
-            <Card className="bg-white/95 backdrop-blur-sm shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-gray-800">Quiz Information</CardTitle>
+            <Card className="bg-white shadow-2xl border-0 transform hover:scale-105 transition-all duration-300">
+              <CardHeader className="bg-gradient-to-r from-gray-900 to-black text-white rounded-t-lg">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <HelpCircle className="h-5 w-5" />
+                  Quiz Information
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Quiz Title</Label>
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="title" className="text-black font-semibold">Quiz Title</Label>
                   <Input
                     id="title"
                     value={quiz.title}
                     onChange={(e) => setQuiz(prev => ({ ...prev, title: e.target.value }))}
                     placeholder="Enter quiz title"
-                    className="mt-1"
+                    className="border-2 border-gray-200 focus:border-black transition-colors shadow-sm"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-black font-semibold">Description</Label>
                   <Textarea
                     id="description"
                     value={quiz.description}
                     onChange={(e) => setQuiz(prev => ({ ...prev, description: e.target.value }))}
                     placeholder="Describe your quiz"
-                    className="mt-1"
+                    className="border-2 border-gray-200 focus:border-black transition-colors shadow-sm resize-none"
                     rows={3}
                   />
                 </div>
-                <div className="pt-4">
-                  <h3 className="font-semibold text-gray-700 mb-2">Questions ({quiz.questions.length})</h3>
-                  <div className="max-h-40 overflow-y-auto space-y-2">
+                <div className="pt-4 border-t border-gray-200">
+                  <h3 className="font-bold text-black mb-4 flex items-center gap-2">
+                    Questions ({quiz.questions.length})
+                  </h3>
+                  <div className="max-h-48 overflow-y-auto space-y-3">
                     {quiz.questions.map((question, index) => (
-                      <div key={question.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm truncate">{index + 1}. {question.question}</span>
+                      <div key={question.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border-l-4 border-black shadow-sm">
+                        <span className="text-sm font-medium text-black truncate flex-1">
+                          {index + 1}. {question.question}
+                        </span>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => removeQuestion(question.id)}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50 ml-2"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
+                    {quiz.questions.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No questions added yet</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Question Builder */}
+          {/* Question Builder - 3D Card */}
           <div className="lg:col-span-2">
-            <Card className="bg-white/95 backdrop-blur-sm shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-gray-800">Add Question</CardTitle>
+            <Card className="bg-white shadow-2xl border-0 transform hover:scale-[1.02] transition-all duration-300">
+              <CardHeader className="bg-gradient-to-r from-gray-900 to-black text-white rounded-t-lg">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Add New Question
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="question">Question</Label>
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="question" className="text-black font-semibold">Question</Label>
                   <Textarea
                     id="question"
                     value={currentQuestion.question}
                     onChange={(e) => setCurrentQuestion(prev => ({ ...prev, question: e.target.value }))}
-                    placeholder="Enter your question"
-                    className="mt-1 text-lg"
+                    placeholder="Enter your question here..."
+                    className="text-lg border-2 border-gray-200 focus:border-black transition-colors shadow-sm resize-none"
                     rows={2}
                   />
                 </div>
@@ -236,20 +252,25 @@ const CreateQuiz = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                   {currentQuestion.answers.map((answer, index) => (
                     <div key={answer.id} className="space-y-2">
-                      <Label>Answer {index + 1}</Label>
+                      <Label className="text-black font-semibold">
+                        Answer {String.fromCharCode(65 + index)}
+                      </Label>
                       <div className="flex gap-2">
                         <Input
                           value={answer.text}
                           onChange={(e) => updateAnswer(answer.id, e.target.value)}
-                          placeholder={`Answer option ${index + 1}`}
-                          className="flex-1"
+                          placeholder={`Answer option ${String.fromCharCode(65 + index)}`}
+                          className="flex-1 border-2 border-gray-200 focus:border-black transition-colors shadow-sm"
                         />
                         <Button
                           type="button"
                           variant={answer.isCorrect ? "default" : "outline"}
                           size="sm"
                           onClick={() => toggleCorrectAnswer(answer.id)}
-                          className={answer.isCorrect ? "bg-green-500 hover:bg-green-600" : ""}
+                          className={answer.isCorrect 
+                            ? "bg-black hover:bg-gray-800 text-white shadow-lg transform hover:scale-105 transition-all" 
+                            : "border-2 border-black text-black hover:bg-black hover:text-white shadow-lg transform hover:scale-105 transition-all"
+                          }
                         >
                           {answer.isCorrect ? "✓" : "○"}
                         </Button>
@@ -258,20 +279,29 @@ const CreateQuiz = () => {
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                   <div className="flex items-center space-x-4">
-                    <Label htmlFor="timeLimit">Time Limit (seconds)</Label>
-                    <Input
-                      id="timeLimit"
-                      type="number"
-                      value={currentQuestion.timeLimit}
-                      onChange={(e) => setCurrentQuestion(prev => ({ ...prev, timeLimit: parseInt(e.target.value) || 30 }))}
-                      className="w-20"
-                      min="5"
-                      max="120"
-                    />
+                    <Label htmlFor="timeLimit" className="text-black font-semibold flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Time Limit
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="timeLimit"
+                        type="number"
+                        value={currentQuestion.timeLimit}
+                        onChange={(e) => setCurrentQuestion(prev => ({ ...prev, timeLimit: parseInt(e.target.value) || 30 }))}
+                        className="w-20 border-2 border-gray-200 focus:border-black transition-colors shadow-sm"
+                        min="5"
+                        max="120"
+                      />
+                      <span className="text-black font-medium">seconds</span>
+                    </div>
                   </div>
-                  <Button onClick={addQuestion} className="bg-blue-500 hover:bg-blue-600">
+                  <Button 
+                    onClick={addQuestion} 
+                    className="bg-black hover:bg-gray-800 text-white shadow-lg transform hover:scale-105 transition-all px-6"
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Question
                   </Button>

@@ -13,6 +13,8 @@ interface HostGameControlProps {
   totalQuestions: number;
   questionTimeLimit: number;
   onQuestionComplete: () => void;
+  timeLeft: number;
+  setTimeLeft: (time: number) => void;
 }
 
 export function HostGameControl({ 
@@ -20,9 +22,10 @@ export function HostGameControl({
   currentQuestionIndex, 
   totalQuestions, 
   questionTimeLimit,
-  onQuestionComplete 
+  onQuestionComplete,
+  timeLeft,
+  setTimeLeft
 }: HostGameControlProps) {
-  const [timeLeft, setTimeLeft] = useState(questionTimeLimit);
   const [isRunning, setIsRunning] = useState(false);
   const [phase, setPhase] = useState<'question' | 'leaderboard'>('question');
 
@@ -30,17 +33,20 @@ export function HostGameControl({
     setTimeLeft(questionTimeLimit);
     setIsRunning(true);
     setPhase('question');
-  }, [currentQuestionIndex, questionTimeLimit]);
+    console.log('HostGameControl: Starting new question timer for', questionTimeLimit, 'seconds');
+  }, [currentQuestionIndex, questionTimeLimit, setTimeLeft]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (isRunning && timeLeft > 0) {
+    if (isRunning && timeLeft > 0 && phase === 'question') {
       interval = setInterval(() => {
         setTimeLeft(prev => {
+          console.log('HostGameControl: Timer tick, time left:', prev - 1);
           if (prev <= 1) {
             setIsRunning(false);
             setPhase('leaderboard');
+            console.log('HostGameControl: Time up! Moving to leaderboard phase');
             toast({ title: 'Time\'s up! Showing leaderboard...' });
             return 0;
           }
@@ -49,15 +55,20 @@ export function HostGameControl({
       }, 1000);
     }
 
-    return () => clearInterval(interval);
-  }, [isRunning, timeLeft]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRunning, timeLeft, phase, setTimeLeft]);
 
   const handleNextQuestion = async () => {
     try {
+      console.log('HostGameControl: Moving to next question');
       const success = await gameManager.nextQuestion(gamePin);
       if (success) {
         toast({ title: 'Moving to next question...' });
         onQuestionComplete();
+        setPhase('question');
+        setIsRunning(true);
       }
     } catch (error) {
       console.error('Error moving to next question:', error);
@@ -67,12 +78,14 @@ export function HostGameControl({
 
   const toggleTimer = () => {
     setIsRunning(!isRunning);
+    console.log('HostGameControl: Timer', isRunning ? 'paused' : 'resumed');
   };
 
   const skipToLeaderboard = () => {
     setIsRunning(false);
     setPhase('leaderboard');
     setTimeLeft(0);
+    console.log('HostGameControl: Manually moved to leaderboard phase');
   };
 
   return (
@@ -99,24 +112,27 @@ export function HostGameControl({
         />
 
         <div className="flex gap-2">
-          <Button
-            onClick={toggleTimer}
-            variant="outline"
-            className="flex-1 bg-black/30 border-white/30 text-white hover:bg-white/20"
-          >
-            {isRunning ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-            {isRunning ? 'Pause' : 'Resume'}
-          </Button>
-          
-          <Button
-            onClick={skipToLeaderboard}
-            variant="outline"
-            className="bg-black/30 border-white/30 text-white hover:bg-white/20"
-            disabled={phase === 'leaderboard'}
-          >
-            <Clock className="h-4 w-4 mr-2" />
-            Show Results
-          </Button>
+          {phase === 'question' && (
+            <>
+              <Button
+                onClick={toggleTimer}
+                variant="outline"
+                className="flex-1 bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                {isRunning ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                {isRunning ? 'Pause' : 'Resume'}
+              </Button>
+              
+              <Button
+                onClick={skipToLeaderboard}
+                variant="outline"
+                className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Show Results
+              </Button>
+            </>
+          )}
         </div>
 
         {phase === 'leaderboard' && (
