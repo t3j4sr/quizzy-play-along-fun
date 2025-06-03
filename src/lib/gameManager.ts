@@ -1,4 +1,3 @@
-
 import { realtimeManager } from './realtimeManager';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -73,7 +72,7 @@ class GameManager {
       id: data.id,
       title: data.title,
       description: data.description || '',
-      questions: Array.isArray(data.questions) ? data.questions as Question[] : [],
+      questions: Array.isArray(data.questions) ? data.questions as unknown as Question[] : [],
       createdAt: new Date(data.created_at).getTime(),
       createdBy: data.created_by
     };
@@ -109,7 +108,7 @@ class GameManager {
         id: data.id,
         title: data.title,
         description: data.description || '',
-        questions: Array.isArray(data.questions) ? data.questions as Question[] : [],
+        questions: Array.isArray(data.questions) ? data.questions as unknown as Question[] : [],
         createdAt: new Date(data.created_at).getTime(),
         createdBy: data.created_by
       };
@@ -181,7 +180,7 @@ class GameManager {
       pin: data.pin,
       status: data.status as 'waiting' | 'playing' | 'finished',
       currentQuestionIndex: data.current_question_index,
-      players: Array.isArray(data.players) ? data.players as Player[] : [],
+      players: Array.isArray(data.players) ? data.players as unknown as Player[] : [],
       createdAt: new Date(data.created_at).getTime(),
       startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
       finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
@@ -218,7 +217,7 @@ class GameManager {
         pin: data.pin,
         status: data.status as 'waiting' | 'playing' | 'finished',
         currentQuestionIndex: data.current_question_index,
-        players: Array.isArray(data.players) ? data.players as Player[] : [],
+        players: Array.isArray(data.players) ? data.players as unknown as Player[] : [],
         createdAt: new Date(data.created_at).getTime(),
         startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
         finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
