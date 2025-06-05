@@ -190,7 +190,9 @@ class GameManager {
     this.games.set(gameSession.pin, gameSession);
     
     // Emit creation event
-    realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
+    setTimeout(() => {
+      realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
+    }, 100);
     
     return gameSession;
   }
@@ -223,7 +225,6 @@ class GameManager {
         finishedAt: data.finished_at ? new Date(data.finished_at).getTime() : undefined
       };
       this.games.set(pin, game);
-      console.log('GameManager: Loaded game from Supabase:', pin);
       return game;
     }
 
@@ -277,10 +278,8 @@ class GameManager {
     
     console.log('GameManager: Player added successfully:', player.id);
     
-    // Emit real-time event
-    setTimeout(() => {
-      realtimeManager.playerJoined(pin, { id: player.id, name: player.name });
-    }, 100);
+    // Emit real-time event immediately
+    realtimeManager.playerJoined(pin, { id: player.id, name: player.name });
     
     return { success: true, player };
   }
@@ -327,6 +326,11 @@ class GameManager {
       return false;
     }
 
+    if (game.players.length === 0) {
+      console.error('GameManager: Cannot start game - no players');
+      return false;
+    }
+
     const { error } = await supabase
       .from('game_sessions')
       .update({ 
@@ -346,10 +350,17 @@ class GameManager {
     
     console.log('GameManager: Game started successfully');
     
-    // Emit real-time event
-    setTimeout(() => {
-      realtimeManager.gameStarted(pin);
-    }, 100);
+    // Emit real-time event immediately
+    realtimeManager.gameStarted(pin);
+    
+    // Also emit question started event for the first question
+    const quiz = await this.getQuiz(game.quizId);
+    if (quiz && quiz.questions.length > 0) {
+      const firstQuestion = quiz.questions[0];
+      setTimeout(() => {
+        realtimeManager.questionStarted(pin, 0, firstQuestion.timeLimit);
+      }, 200);
+    }
     
     return true;
   }
@@ -415,19 +426,20 @@ class GameManager {
     
     console.log('GameManager: Answer submitted, points awarded:', points);
     
-    // Emit real-time event
-    setTimeout(() => {
-      realtimeManager.answerSubmitted(pin, playerId, answerId);
-    }, 100);
+    // Emit real-time event immediately
+    realtimeManager.answerSubmitted(pin, playerId, answerId);
     
     return true;
   }
 
   async nextQuestion(pin: string): Promise<boolean> {
+    console.log('GameManager: Moving to next question for game:', pin);
+    
     const game = await this.getGameByPin(pin);
     const quiz = game ? await this.getQuiz(game.quizId) : null;
     
     if (!game || !quiz) {
+      console.error('GameManager: Game or quiz not found');
       return false;
     }
 
@@ -457,18 +469,15 @@ class GameManager {
       
       // Emit game ended event
       const finalScores = this.getLeaderboard(pin);
-      setTimeout(() => {
-        realtimeManager.gameEnded(pin, finalScores);
-      }, 100);
+      realtimeManager.gameEnded(pin, finalScores);
     } else {
       // Emit new question event
       const currentQuestion = quiz.questions[newQuestionIndex];
-      setTimeout(() => {
-        realtimeManager.questionStarted(pin, newQuestionIndex, currentQuestion.timeLimit);
-      }, 100);
+      realtimeManager.questionStarted(pin, newQuestionIndex, currentQuestion.timeLimit);
     }
 
     this.games.set(pin, game);
+    console.log('GameManager: Successfully moved to question', newQuestionIndex);
     return true;
   }
 

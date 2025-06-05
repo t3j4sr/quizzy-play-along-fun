@@ -14,6 +14,8 @@ const HostGame = () => {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const [timeLeft, setTimeLeft] = useState(30);
+  const [gamePin, setGamePin] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const { 
     game, 
@@ -23,34 +25,40 @@ const HostGame = () => {
     currentQuestion, 
     isGameActive, 
     isGameFinished,
-    refreshGameData
+    refreshGameData,
+    connect,
+    isConnected,
+    error
   } = useGameState({ 
-    pin: game?.pin, 
+    pin: gamePin || undefined, 
     autoConnect: false 
   });
 
-  // Load quiz and create game session
+  // Initialize game session
   useEffect(() => {
-    const loadQuiz = async () => {
+    const initializeGame = async () => {
       if (!quizId) {
         toast({ title: 'Quiz ID is required', variant: 'destructive' });
         navigate('/');
         return;
       }
 
-      // Try to load from localStorage first
-      const savedQuiz = localStorage.getItem(`quiz_${quizId}`);
-      if (!savedQuiz) {
-        toast({ title: 'Quiz not found', variant: 'destructive' });
-        navigate('/');
-        return;
-      }
+      setIsInitializing(true);
+      console.log('HostGame: Initializing game for quiz:', quizId);
 
       try {
+        // Try to load from localStorage first
+        const savedQuiz = localStorage.getItem(`quiz_${quizId}`);
+        if (!savedQuiz) {
+          toast({ title: 'Quiz not found', variant: 'destructive' });
+          navigate('/');
+          return;
+        }
+
         const quizData = JSON.parse(savedQuiz);
         console.log('HostGame: Loaded quiz:', quizData.title);
         
-        // Create game session using gameManager
+        // Import gameManager and create game session
         const { gameManager } = await import('@/lib/gameManager');
         
         // First create quiz in Supabase
@@ -59,27 +67,46 @@ const HostGame = () => {
           description: quizData.description || '',
           questions: quizData.questions.map(q => ({
             ...q,
-            points: 1000 // Default points
+            points: q.points || 1000
           })),
           createdBy: 'host'
         });
+
+        console.log('HostGame: Created quiz in Supabase:', createdQuiz.id);
 
         // Then create game session
         const gameSession = await gameManager.createGameSession(createdQuiz.id);
         console.log('HostGame: Created game session with PIN:', gameSession.pin);
         
-        // Connect to the game
-        const { connect } = await import('@/hooks/useGameState');
-        // The useGameState hook will handle the connection
+        // Set the PIN and connect
+        setGamePin(gameSession.pin);
         
       } catch (error) {
         console.error('HostGame: Error setting up game:', error);
         toast({ title: 'Failed to setup game', variant: 'destructive' });
+        setIsInitializing(false);
       }
     };
 
-    loadQuiz();
+    initializeGame();
   }, [quizId, navigate]);
+
+  // Connect once we have a PIN
+  useEffect(() => {
+    if (gamePin && !isConnected) {
+      console.log('HostGame: Connecting to game:', gamePin);
+      connect(gamePin).then(() => {
+        setIsInitializing(false);
+      });
+    }
+  }, [gamePin, isConnected, connect]);
+
+  // Show error if connection fails
+  useEffect(() => {
+    if (error) {
+      toast({ title: error, variant: 'destructive' });
+    }
+  }, [error]);
 
   const handleStartGame = async () => {
     console.log('HostGame: Starting game...');
@@ -96,8 +123,8 @@ const HostGame = () => {
   };
 
   const copyGamePin = () => {
-    if (game?.pin) {
-      navigator.clipboard.writeText(game.pin);
+    if (gamePin) {
+      navigator.clipboard.writeText(gamePin);
       toast({ title: 'Game PIN copied to clipboard!' });
     }
   };
@@ -112,10 +139,26 @@ const HostGame = () => {
     }
   };
 
-  if (!game || !quiz) {
+  const handleRefresh = async () => {
+    if (gamePin) {
+      console.log('HostGame: Manual refresh triggered');
+      await refreshGameData();
+      toast({ title: 'Game data refreshed' });
+    }
+  };
+
+  if (isInitializing) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
         <div className="text-white text-xl">Setting up your game...</div>
+      </div>
+    );
+  }
+
+  if (!game || !quiz || !gamePin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
+        <div className="text-white text-xl">Loading game session...</div>
       </div>
     );
   }
@@ -135,7 +178,7 @@ const HostGame = () => {
           </Button>
           <h1 className="text-3xl font-bold text-white">{quiz.title}</h1>
           <Button 
-            onClick={refreshGameData}
+            onClick={handleRefresh}
             variant="outline"
             className="bg-black/30 border-white/30 text-white hover:bg-white/20"
           >
@@ -151,7 +194,7 @@ const HostGame = () => {
               <h2 className="text-2xl font-bold text-white mb-4">Game PIN</h2>
               <div className="flex items-center justify-center gap-4">
                 <span className="text-6xl font-bold text-white tracking-wider">
-                  {game.pin}
+                  {gamePin}
                 </span>
                 <Button
                   onClick={copyGamePin}
@@ -174,23 +217,22 @@ const HostGame = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Users className="h-5 w-5" />
-                Players
+                Players ({game.players.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-white mb-2">
                 {game.players.length}
               </div>
-              <div className="space-y-2">
-                {game.players.slice(0, 5).map(player => (
-                  <div key={player.id} className="text-white/70 text-sm">
-                    {player.name}
-                  </div>
-                ))}
-                {game.players.length > 5 && (
-                  <div className="text-white/50 text-sm">
-                    +{game.players.length - 5} more...
-                  </div>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {game.players.length > 0 ? (
+                  game.players.map(player => (
+                    <div key={player.id} className="text-white/70 text-sm bg-white/10 px-2 py-1 rounded">
+                      {player.name} ({player.score} pts)
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-white/50 text-sm">No players yet</div>
                 )}
               </div>
             </CardContent>
@@ -246,7 +288,7 @@ const HostGame = () => {
           <div className="grid lg:grid-cols-2 gap-8">
             <div className="space-y-6">
               <HostGameControl
-                gamePin={game.pin}
+                gamePin={gamePin}
                 currentQuestionIndex={game.currentQuestionIndex || 0}
                 totalQuestions={quiz.questions.length}
                 questionTimeLimit={currentQuestion.timeLimit}
