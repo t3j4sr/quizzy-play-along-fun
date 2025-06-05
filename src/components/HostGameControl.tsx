@@ -1,8 +1,9 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Play, Pause, SkipForward, Clock } from 'lucide-react';
+import { Play, Pause, SkipForward, Clock, RefreshCw } from 'lucide-react';
 import { gameManager } from '@/lib/gameManager';
 import { toast } from '@/hooks/use-toast';
 
@@ -87,14 +88,28 @@ export function HostGameControl({
     console.log('HostGameControl: Manually moved to leaderboard phase');
   };
 
+  const handleReload = () => {
+    window.location.reload();
+  };
+
   return (
     <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
       <CardHeader>
         <CardTitle className="flex items-center justify-between text-white">
           <span>Question Control</span>
-          <span className="text-sm">
-            {currentQuestionIndex + 1} of {totalQuestions}
-          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleReload}
+              variant="outline"
+              size="sm"
+              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <span className="text-sm">
+              {currentQuestionIndex + 1} of {totalQuestions}
+            </span>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

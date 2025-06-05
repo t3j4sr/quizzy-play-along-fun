@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Trophy, Zap, Users } from 'lucide-react';
+import { Clock, Trophy, Zap, Users, RefreshCw } from 'lucide-react';
 import { useGameState } from '@/hooks/useGameState';
 import { toast } from '@/hooks/use-toast';
 
@@ -122,6 +122,10 @@ const PlayGame = () => {
     return "bg-gray-500 text-gray-300 border border-gray-400";
   };
 
+  const handleReload = () => {
+    window.location.reload();
+  };
+
   // Loading states
   if (isLoading || !isConnected) {
     return (
@@ -172,10 +176,18 @@ const PlayGame = () => {
             <p className="text-white/70 mb-6">
               {currentPlayer.name}, you're ready to play!
             </p>
-            <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+            <div className="bg-white/10 rounded-lg p-4 border border-white/20 mb-4">
               <p className="text-white/80">Game PIN: <span className="font-bold text-xl">{game.pin}</span></p>
               <p className="text-white/60 text-sm mt-2">{game.players.length} players joined</p>
             </div>
+            <Button
+              onClick={handleReload}
+              variant="outline"
+              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Game
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -217,7 +229,15 @@ const PlayGame = () => {
           <CardContent className="text-center py-12">
             <Users className="h-16 w-16 text-white/60 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-4">Loading Question...</h2>
-            <p className="text-white/70">Please wait while the next question loads</p>
+            <p className="text-white/70 mb-6">Please wait while the next question loads</p>
+            <Button
+              onClick={handleReload}
+              variant="outline"
+              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Game
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -284,7 +304,15 @@ const PlayGame = () => {
             <p className="text-lg font-semibold">{currentPlayer.name}</p>
             <p className="text-sm opacity-75">Score: {currentPlayer.score.toLocaleString()}</p>
           </div>
-          <div className="text-right">
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleReload}
+              variant="outline"
+              size="sm"
+              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
               <span className="text-2xl font-bold">{timeLeft}</span>
