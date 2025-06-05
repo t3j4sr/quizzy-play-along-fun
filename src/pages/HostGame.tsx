@@ -16,6 +16,7 @@ const HostGame = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [gamePin, setGamePin] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showAnswers, setShowAnswers] = useState(false);
 
   const { 
     game, 
@@ -33,6 +34,15 @@ const HostGame = () => {
     pin: gamePin || undefined, 
     autoConnect: false 
   });
+
+  // Show answers only when timer hits 0 or manually skipped to leaderboard
+  useEffect(() => {
+    if (timeLeft === 0) {
+      setShowAnswers(true);
+    } else if (timeLeft > 0) {
+      setShowAnswers(false);
+    }
+  }, [timeLeft]);
 
   // Initialize game session
   useEffect(() => {
@@ -133,9 +143,10 @@ const HostGame = () => {
     console.log('HostGame: Question completed, refreshing data...');
     await refreshGameData();
     
-    // Reset timer for next question
+    // Reset timer and answers for next question
     if (currentQuestion) {
       setTimeLeft(currentQuestion.timeLimit);
+      setShowAnswers(false);
     }
   };
 
@@ -310,7 +321,7 @@ const HostGame = () => {
                       <div
                         key={answer.id}
                         className={`p-3 rounded-lg border ${
-                          answer.isCorrect
+                          showAnswers && answer.isCorrect
                             ? 'bg-green-500/20 border-green-500/30 text-green-400'
                             : 'bg-white/10 border-white/20 text-white/70'
                         }`}

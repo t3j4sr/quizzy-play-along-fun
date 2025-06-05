@@ -1,3 +1,4 @@
+
 import { realtimeManager } from './realtimeManager';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -189,10 +190,8 @@ class GameManager {
     console.log('GameManager: Created game session:', gameSession);
     this.games.set(gameSession.pin, gameSession);
     
-    // Emit creation event
-    setTimeout(() => {
-      realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
-    }, 100);
+    // Emit creation event immediately
+    realtimeManager.emit(gameSession.pin, 'game_created', { pin: gameSession.pin });
     
     return gameSession;
   }
@@ -350,16 +349,17 @@ class GameManager {
     
     console.log('GameManager: Game started successfully');
     
-    // Emit real-time event immediately
+    // Emit real-time events immediately with aggressive timing
     realtimeManager.gameStarted(pin);
     
     // Also emit question started event for the first question
     const quiz = await this.getQuiz(game.quizId);
     if (quiz && quiz.questions.length > 0) {
       const firstQuestion = quiz.questions[0];
-      setTimeout(() => {
-        realtimeManager.questionStarted(pin, 0, firstQuestion.timeLimit);
-      }, 200);
+      // Multiple events to ensure delivery
+      setTimeout(() => realtimeManager.questionStarted(pin, 0, firstQuestion.timeLimit), 50);
+      setTimeout(() => realtimeManager.questionStarted(pin, 0, firstQuestion.timeLimit), 150);
+      setTimeout(() => realtimeManager.questionStarted(pin, 0, firstQuestion.timeLimit), 300);
     }
     
     return true;

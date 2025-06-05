@@ -41,17 +41,18 @@ export function HostGameControl({
     
     if (isRunning && timeLeft > 0 && phase === 'question') {
       interval = setInterval(() => {
-        const newTime = timeLeft - 1;
-        console.log('HostGameControl: Timer tick, time left:', newTime);
-        if (newTime <= 0) {
-          setIsRunning(false);
-          setPhase('leaderboard');
-          setTimeLeft(0);
-          console.log('HostGameControl: Time up! Moving to leaderboard phase');
-          toast({ title: 'Time\'s up! Showing leaderboard...' });
-        } else {
-          setTimeLeft(newTime);
-        }
+        setTimeLeft(prev => {
+          const newTime = prev - 1;
+          console.log('HostGameControl: Timer tick, time left:', newTime);
+          if (newTime <= 0) {
+            setIsRunning(false);
+            setPhase('leaderboard');
+            console.log('HostGameControl: Time up! Moving to leaderboard phase');
+            toast({ title: 'Time\'s up! Showing leaderboard...' });
+            return 0;
+          }
+          return newTime;
+        });
       }, 1000);
     }
 
