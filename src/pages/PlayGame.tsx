@@ -31,11 +31,23 @@ const PlayGame = () => {
     isGameFinished,
     error,
     isConnected,
-    isLoading
+    isLoading,
+    refreshGameData
   } = useGameState({ 
     pin: pin || undefined,
     playerId: playerId || undefined 
   });
+
+  // Force refresh every 2 seconds for better real-time feel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (pin) {
+        refreshGameData();
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [pin, refreshGameData]);
 
   // Handle game status changes
   useEffect(() => {
@@ -129,10 +141,22 @@ const PlayGame = () => {
   // Loading states
   if (isLoading || !isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <div className="text-white text-xl">
-          {isLoading ? 'Connecting to game...' : 'Loading...'}
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
+          <CardContent className="text-center py-12">
+            <div className="text-white text-xl mb-4">
+              {isLoading ? 'Connecting to game...' : 'Loading...'}
+            </div>
+            <Button
+              onClick={handleReload}
+              variant="outline"
+              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -145,9 +169,22 @@ const PlayGame = () => {
           <CardContent className="text-center py-12">
             <h2 className="text-2xl font-bold text-white mb-4">Connection Error</h2>
             <p className="text-white/70 mb-6">{error}</p>
-            <Button onClick={() => navigate('/')} className="bg-white text-black">
-              Back to Home
-            </Button>
+            <div className="space-y-3">
+              <Button 
+                onClick={handleReload}
+                className="w-full bg-white text-black"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Game
+              </Button>
+              <Button 
+                onClick={() => navigate('/')} 
+                variant="outline"
+                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                Back to Home
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -157,8 +194,29 @@ const PlayGame = () => {
   // Game not found
   if (!game || !currentPlayer) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <div className="text-white text-xl">Game not found or player not connected</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
+          <CardContent className="text-center py-12">
+            <h2 className="text-2xl font-bold text-white mb-4">Game Not Found</h2>
+            <p className="text-white/70 mb-6">Could not connect to the game</p>
+            <div className="space-y-3">
+              <Button 
+                onClick={handleReload}
+                className="w-full bg-white text-black"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Game
+              </Button>
+              <Button 
+                onClick={() => navigate('/')} 
+                variant="outline"
+                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                Back to Home
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -168,26 +226,37 @@ const PlayGame = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
         <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
-          <CardContent className="text-center py-12">
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/30">
+          <CardContent className="text-center py-12 space-y-6">
+            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto border border-white/30">
               <Clock className="h-10 w-10 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">Waiting for host to start...</h2>
-            <p className="text-white/70 mb-6">
+            <h2 className="text-2xl font-bold text-white">Waiting for host to start...</h2>
+            <p className="text-white/70">
               {currentPlayer.name}, you're ready to play!
             </p>
-            <div className="bg-white/10 rounded-lg p-4 border border-white/20 mb-4">
+            <div className="bg-white/10 rounded-lg p-4 border border-white/20">
               <p className="text-white/80">Game PIN: <span className="font-bold text-xl">{game.pin}</span></p>
               <p className="text-white/60 text-sm mt-2">{game.players.length} players joined</p>
             </div>
-            <Button
-              onClick={handleReload}
-              variant="outline"
-              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh Game
-            </Button>
+            
+            <div className="space-y-4">
+              <div className="flex justify-center">
+                <div className="flex space-x-2">
+                  <div className="w-3 h-3 bg-white rounded-full animate-bounce"></div>
+                  <div className="w-3 h-3 bg-white/70 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-3 h-3 bg-white/40 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+              </div>
+              
+              <Button
+                onClick={handleReload}
+                variant="outline"
+                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Game
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -233,7 +302,7 @@ const PlayGame = () => {
             <Button
               onClick={handleReload}
               variant="outline"
-              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+              className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh Game
