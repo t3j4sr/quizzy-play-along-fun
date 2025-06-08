@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Users, Clock, Zap, Sparkles } from 'lucide-react';
+import { User, Users, Clock, Zap, Sparkles, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useGameState } from '@/hooks/useGameState';
 
@@ -14,11 +14,31 @@ const JoinGame = () => {
   const [playerName, setPlayerName] = useState('');
   const [currentPlayer, setCurrentPlayer] = useState(null);
   
-  const { game, connect, joinGame, isConnected, error } = useGameState({ 
+  const { game, connect, joinGame, isConnected, error, refreshGameData } = useGameState({ 
     pin,
     playerId: currentPlayer?.id,
     autoConnect: true 
   });
+
+  // Manual refresh function
+  const handleManualRefresh = () => {
+    console.log('JoinGame: Manual refresh triggered');
+    if (pin) {
+      refreshGameData();
+      toast({ title: 'Refreshing game...' });
+    }
+  };
+
+  // Auto-refresh every 2 seconds for better connectivity
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (pin && isConnected) {
+        refreshGameData();
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [pin, refreshGameData, isConnected]);
 
   useEffect(() => {
     if (error) {
@@ -62,7 +82,15 @@ const JoinGame = () => {
               <Sparkles className="w-8 h-8 text-white mx-auto animate-pulse" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">Connecting to Game</h2>
-            <p className="text-white/80">Finding your quiz room...</p>
+            <p className="text-white/80 mb-4">Finding your quiz room...</p>
+            <Button
+              onClick={handleManualRefresh}
+              variant="outline"
+              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Game
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -74,8 +102,18 @@ const JoinGame = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
         <Card className="w-full max-w-md bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl animate-scale-in">
           <CardHeader className="text-center">
-            <div className="w-20 h-20 bg-gradient-to-r from-white to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <Users className="h-10 w-10 text-black" />
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-20 h-20 bg-gradient-to-r from-white to-gray-200 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                <Users className="h-10 w-10 text-black" />
+              </div>
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                size="sm"
+                className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
             <CardTitle className="text-3xl text-white mb-2">You're In!</CardTitle>
             <div className="bg-black/30 rounded-lg p-3 border border-white/20">
@@ -111,6 +149,15 @@ const JoinGame = () => {
                 </div>
                 <p className="text-sm text-white/70">The game will start automatically when the host begins</p>
               </div>
+
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Game
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -178,6 +225,15 @@ const JoinGame = () => {
               )}
             </div>
           )}
+
+          <Button
+            onClick={handleManualRefresh}
+            variant="outline"
+            className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Game
+          </Button>
         </CardContent>
       </Card>
     </div>
