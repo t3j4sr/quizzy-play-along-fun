@@ -33,13 +33,14 @@ export function useGameState(options: UseGameStateOptions = {}) {
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const channelRef = useRef<any>(null);
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Force refresh game data with better error handling
-  const refreshGameData = useCallback(async (gamePin: string) => {
-    console.log('useGameState: Refreshing game data for PIN:', gamePin);
+  // Simplified refresh with better error handling
+  const refreshGameData = useCallback(async () => {
+    if (!pin) return;
+    
+    console.log('useGameState: Refreshing game data for PIN:', pin);
     try {
-      const game = await gameManager.getGameByPin(gamePin);
+      const game = await gameManager.getGameByPin(pin);
       if (game) {
         const quiz = await gameManager.getQuiz(game.quizId);
         const currentPlayer = playerId 
@@ -50,7 +51,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
           status: game.status,
           currentQuestionIndex: game.currentQuestionIndex,
           playerCount: game.players.length, 
-          players: game.players.map(p => ({ id: p.id, name: p.name })),
           currentPlayer: currentPlayer?.name 
         });
 
@@ -59,7 +59,8 @@ export function useGameState(options: UseGameStateOptions = {}) {
           game,
           quiz: quiz || prev.quiz,
           currentPlayer,
-          error: null
+          error: null,
+          isConnected: true
         }));
       }
     } catch (error) {
@@ -69,9 +70,9 @@ export function useGameState(options: UseGameStateOptions = {}) {
         error: 'Failed to refresh game data'
       }));
     }
-  }, [playerId]);
+  }, [pin, playerId]);
 
-  // Connect to game with enhanced real-time updates
+  // Connect to game with simplified real-time updates
   const connect = useCallback(async (gamePin: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
@@ -84,10 +85,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
         unsubscribeRef.current = null;
-      }
-      if (refreshTimeoutRef.current) {
-        clearInterval(refreshTimeoutRef.current);
-        refreshTimeoutRef.current = null;
       }
 
       const game = await gameManager.getGameByPin(gamePin);
@@ -114,7 +111,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
         error: null
       }));
 
-      // Set up aggressive Supabase real-time subscription
+      // Set up Supabase real-time subscription
       channelRef.current = supabase
         .channel(`game_realtime_${gamePin}_${Date.now()}`)
         .on(
@@ -126,27 +123,18 @@ export function useGameState(options: UseGameStateOptions = {}) {
             filter: `pin=eq.${gamePin}`
           },
           async (payload) => {
-            console.log('useGameState: Supabase real-time update:', payload.eventType, payload);
-            
-            // Immediate refresh for any database changes
-            await refreshGameData(gamePin);
+            console.log('useGameState: Supabase real-time update:', payload.eventType);
+            await refreshGameData();
           }
         )
         .subscribe((status) => {
           console.log('useGameState: Supabase subscription status:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('useGameState: Successfully subscribed to game updates');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('useGameState: Supabase channel error');
-          }
         });
 
       // Subscribe to localStorage events for same-device updates
       const unsubscribe = realtimeManager.subscribe(gamePin, async (event) => {
-        console.log('useGameState: RealtimeManager event:', event.type, event.payload);
-        
-        // Force immediate refresh for all events
-        await refreshGameData(gamePin);
+        console.log('useGameState: RealtimeManager event:', event.type);
+        await refreshGameData();
 
         // Show notifications for players
         if (playerId) {
@@ -167,29 +155,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
       });
 
       unsubscribeRef.current = unsubscribe;
-
-      // Set up ultra-aggressive refresh for real-time feel
-      const startRefreshInterval = () => {
-        if (refreshTimeoutRef.current) {
-          clearInterval(refreshTimeoutRef.current);
-        }
-        // Refresh every 500ms for maximum real-time responsiveness
-        refreshTimeoutRef.current = setInterval(() => {
-          refreshGameData(gamePin);
-        }, 500);
-      };
-
-      startRefreshInterval();
-
-      // Clean up on disconnect
-      const originalUnsubscribe = unsubscribeRef.current;
-      unsubscribeRef.current = () => {
-        if (refreshTimeoutRef.current) {
-          clearInterval(refreshTimeoutRef.current);
-          refreshTimeoutRef.current = null;
-        }
-        originalUnsubscribe();
-      };
 
     } catch (error) {
       console.error('useGameState: Connection error:', error);
@@ -212,11 +177,6 @@ export function useGameState(options: UseGameStateOptions = {}) {
       channelRef.current = null;
     }
 
-    if (refreshTimeoutRef.current) {
-      clearInterval(refreshTimeoutRef.current);
-      refreshTimeoutRef.current = null;
-    }
-
     setState({
       game: null,
       quiz: null,
@@ -235,7 +195,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
       
       // Force immediate refresh after joining
       setTimeout(() => {
-        refreshGameData(gamePin);
+        refreshGameData();
       }, 100);
       
       return result.player;
@@ -252,13 +212,13 @@ export function useGameState(options: UseGameStateOptions = {}) {
   const startGame = useCallback(async () => {
     if (!state.game) return false;
 
-    console.log('Starting game:', state.game.pin);
+    console.log('useGameState: Starting game:', state.game.pin);
     const success = await gameManager.startGame(state.game.pin);
     if (success) {
       toast({ title: 'Game started!' });
       // Force immediate refresh
       setTimeout(() => {
-        refreshGameData(state.game!.pin);
+        refreshGameData();
       }, 100);
     } else {
       toast({ title: 'Failed to start game', variant: 'destructive' });
@@ -269,7 +229,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
   const submitAnswer = useCallback(async (questionId: string, answerId: string, timeSpent: number) => {
     if (!state.game || !state.currentPlayer) return false;
 
-    console.log('Submitting answer:', { questionId, answerId, timeSpent });
+    console.log('useGameState: Submitting answer:', { questionId, answerId, timeSpent });
     const success = await gameManager.submitAnswer(
       state.game.pin, 
       state.currentPlayer.id, 
@@ -281,7 +241,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
     if (success) {
       // Force immediate refresh to update score
       setTimeout(() => {
-        refreshGameData(state.game!.pin);
+        refreshGameData();
       }, 100);
     }
 
@@ -302,99 +262,17 @@ export function useGameState(options: UseGameStateOptions = {}) {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }
-      if (refreshTimeoutRef.current) {
-        clearInterval(refreshTimeoutRef.current);
-      }
     };
   }, [pin, autoConnect, connect, state.isConnected, state.isLoading]);
 
   return {
     ...state,
     connect,
-    disconnect: useCallback(() => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
-
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-
-      if (refreshTimeoutRef.current) {
-        clearInterval(refreshTimeoutRef.current);
-        refreshTimeoutRef.current = null;
-      }
-
-      setState({
-        game: null,
-        quiz: null,
-        currentPlayer: null,
-        isConnected: false,
-        isLoading: false,
-        error: null
-      });
-    }, []),
-    joinGame: useCallback(async (gamePin: string, playerName: string) => {
-      const result = await gameManager.addPlayerToGame(gamePin, playerName);
-      
-      if (result.success && result.player) {
-        toast({ title: `Welcome ${playerName}! You've joined the game.` });
-        
-        // Force immediate refresh after joining
-        setTimeout(() => {
-          refreshGameData(gamePin);
-        }, 100);
-        
-        return result.player;
-      } else {
-        toast({ 
-          title: 'Failed to join game', 
-          description: result.error,
-          variant: 'destructive' 
-        });
-        return null;
-      }
-    }, [refreshGameData]),
-    startGame: useCallback(async () => {
-      if (!state.game) return false;
-
-      console.log('useGameState: Starting game:', state.game.pin);
-      const success = await gameManager.startGame(state.game.pin);
-      if (success) {
-        toast({ title: 'Game started!' });
-        // Force immediate refresh
-        setTimeout(() => {
-          refreshGameData(state.game!.pin);
-        }, 100);
-      } else {
-        toast({ title: 'Failed to start game', variant: 'destructive' });
-      }
-      return success;
-    }, [state.game, refreshGameData]),
-    submitAnswer: useCallback(async (questionId: string, answerId: string, timeSpent: number) => {
-      if (!state.game || !state.currentPlayer) return false;
-
-      console.log('useGameState: Submitting answer:', { questionId, answerId, timeSpent });
-      const success = await gameManager.submitAnswer(
-        state.game.pin, 
-        state.currentPlayer.id, 
-        questionId, 
-        answerId, 
-        timeSpent
-      );
-
-      if (success) {
-        // Force immediate refresh to update score
-        setTimeout(() => {
-          refreshGameData(state.game!.pin);
-        }, 100);
-      }
-
-      return success;
-    }, [state.game, state.currentPlayer, refreshGameData]),
-    refreshGameData: () => pin ? refreshGameData(pin) : Promise.resolve(),
+    disconnect,
+    joinGame,
+    startGame,
+    submitAnswer,
+    refreshGameData,
     // Computed values
     isHost: Boolean(state.game && !playerId),
     canStart: Boolean(state.game && state.game.status === 'waiting' && state.game.players.length > 0),

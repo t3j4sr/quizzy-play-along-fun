@@ -38,16 +38,25 @@ const PlayGame = () => {
     playerId: playerId || undefined 
   });
 
-  // Force refresh every 2 seconds for better real-time feel
+  // Manual refresh for better connectivity
+  const handleManualRefresh = () => {
+    console.log('PlayGame: Manual refresh triggered');
+    if (pin) {
+      refreshGameData();
+      toast({ title: 'Refreshing game...' });
+    }
+  };
+
+  // Auto-refresh every 1 second for better real-time feel
   useEffect(() => {
     const interval = setInterval(() => {
-      if (pin) {
+      if (pin && isConnected) {
         refreshGameData();
       }
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [pin, refreshGameData]);
+  }, [pin, refreshGameData, isConnected]);
 
   // Handle game status changes
   useEffect(() => {
@@ -134,10 +143,6 @@ const PlayGame = () => {
     return "bg-gray-500 text-gray-300 border border-gray-400";
   };
 
-  const handleReload = () => {
-    window.location.reload();
-  };
-
   // Loading states
   if (isLoading || !isConnected) {
     return (
@@ -148,12 +153,12 @@ const PlayGame = () => {
               {isLoading ? 'Connecting to game...' : 'Loading...'}
             </div>
             <Button
-              onClick={handleReload}
+              onClick={handleManualRefresh}
               variant="outline"
               className="bg-black/30 border-white/30 text-white hover:bg-white/20"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              Refresh Game
             </Button>
           </CardContent>
         </Card>
@@ -171,7 +176,7 @@ const PlayGame = () => {
             <p className="text-white/70 mb-6">{error}</p>
             <div className="space-y-3">
               <Button 
-                onClick={handleReload}
+                onClick={handleManualRefresh}
                 className="w-full bg-white text-black"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -201,7 +206,7 @@ const PlayGame = () => {
             <p className="text-white/70 mb-6">Could not connect to the game</p>
             <div className="space-y-3">
               <Button 
-                onClick={handleReload}
+                onClick={handleManualRefresh}
                 className="w-full bg-white text-black"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -249,7 +254,7 @@ const PlayGame = () => {
               </div>
               
               <Button
-                onClick={handleReload}
+                onClick={handleManualRefresh}
                 variant="outline"
                 className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
               >
@@ -278,12 +283,22 @@ const PlayGame = () => {
               <p className="text-lg mb-2 font-semibold">Final Score</p>
               <p className="text-5xl font-bold">{currentPlayer.score.toLocaleString()}</p>
             </div>
-            <Button 
-              onClick={() => navigate('/')}
-              className="bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black"
-            >
-              Play Again
-            </Button>
+            <div className="space-y-3">
+              <Button 
+                onClick={() => navigate('/')}
+                className="bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black"
+              >
+                Play Again
+              </Button>
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Game
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -300,7 +315,7 @@ const PlayGame = () => {
             <h2 className="text-2xl font-bold text-white mb-4">Loading Question...</h2>
             <p className="text-white/70 mb-6">Please wait while the next question loads</p>
             <Button
-              onClick={handleReload}
+              onClick={handleManualRefresh}
               variant="outline"
               className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
             >
@@ -346,12 +361,22 @@ const PlayGame = () => {
                 +{pointsEarned.toLocaleString()} points!
               </p>
             )}
-            <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+            <div className="bg-white/10 rounded-lg p-4 border border-white/20 mb-4">
               <p className="text-lg text-white">
                 Your Score: <strong>{currentPlayer.score.toLocaleString()}</strong>
               </p>
             </div>
-            <p className="text-white/60 text-sm mt-4">Waiting for next question...</p>
+            <div className="space-y-3">
+              <p className="text-white/60 text-sm">Waiting for next question...</p>
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Game
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -375,7 +400,7 @@ const PlayGame = () => {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={handleReload}
+              onClick={handleManualRefresh}
               variant="outline"
               size="sm"
               className="bg-black/30 border-white/30 text-white hover:bg-white/20"
