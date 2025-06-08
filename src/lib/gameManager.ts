@@ -1,4 +1,3 @@
-
 import { realtimeManager } from './realtimeManager';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -411,25 +410,46 @@ class GameManager {
 
     player.score += points;
 
-    // Update in Supabase
-    const { error } = await supabase
-      .from('game_sessions')
-      .update({ players: game.players as any })
-      .eq('pin', pin);
+    console.log('GameManager: Answer processed:', { isCorrect, points, newScore: player.score });
 
-    if (error) {
-      console.error('GameManager: Error submitting answer:', error);
-      return false;
+    // Update in Supabase with retry logic
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { error } = await supabase
+          .from('game_sessions')
+          .update({ players: game.players as any })
+          .eq('pin', pin);
+
+        if (error) {
+          console.error(`GameManager: Error submitting answer (attempt ${attempt}):`, error);
+          if (attempt === maxRetries) {
+            return false;
+          }
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+
+        // Success - update local cache and emit events
+        this.games.set(pin, game);
+        
+        console.log('GameManager: Answer submitted successfully, points awarded:', points);
+        
+        // Emit real-time event immediately
+        realtimeManager.answerSubmitted(pin, playerId, answerId);
+        
+        return true;
+      } catch (error) {
+        console.error(`GameManager: Exception submitting answer (attempt ${attempt}):`, error);
+        if (attempt === maxRetries) {
+          return false;
+        }
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+      }
     }
 
-    this.games.set(pin, game);
-    
-    console.log('GameManager: Answer submitted, points awarded:', points);
-    
-    // Emit real-time event immediately
-    realtimeManager.answerSubmitted(pin, playerId, answerId);
-    
-    return true;
+    return false;
   }
 
   async nextQuestion(pin: string): Promise<boolean> {
