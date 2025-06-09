@@ -25,7 +25,7 @@ const Index = () => {
           {/* Main Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center max-w-md mx-auto">
             <Button
-              onClick={() => navigate('/create-quiz')}
+              onClick={() => navigate('/create')}
               size="lg"
               className="w-full sm:w-auto bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black font-bold text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 h-auto"
             >
@@ -33,7 +33,7 @@ const Index = () => {
               Create Quiz
             </Button>
             <Button
-              onClick={() => navigate('/join')}
+              onClick={() => navigate('/game/join')}
               size="lg"
               variant="outline"
               className="w-full sm:w-auto bg-black/30 border-white/30 text-white hover:bg-white/20 font-bold text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 h-auto"
@@ -131,14 +131,14 @@ const Index = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <Button
-                  onClick={() => navigate('/create-quiz')}
+                  onClick={() => navigate('/create')}
                   className="bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black font-bold"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Create Your First Quiz
                 </Button>
                 <Button
-                  onClick={() => navigate('/join')}
+                  onClick={() => navigate('/game/join')}
                   variant="outline"
                   className="bg-black/30 border-white/30 text-white hover:bg-white/20 font-bold"
                 >
