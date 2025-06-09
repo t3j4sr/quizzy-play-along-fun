@@ -17,22 +17,35 @@ export function HostLeaderboard({ players, currentQuestionIndex, totalQuestions,
   const [answeredCount, setAnsweredCount] = useState(0);
 
   useEffect(() => {
+    console.log('HostLeaderboard: Players updated:', {
+      playerCount: players.length,
+      currentQuestionIndex,
+      playersData: players.map(p => ({
+        name: p.name,
+        score: p.score,
+        answersCount: p.answers.length
+      }))
+    });
+
     // Sort players by score in descending order
     const sorted = [...players].sort((a, b) => b.score - a.score);
     setSortedPlayers(sorted);
 
     // Count how many players answered the current question
-    const currentQuestionId = `question_${currentQuestionIndex}`;
+    // Check if they have more answers than the current question index
     const answered = players.filter(player => 
-      player.answers.some(answer => answer.questionId === currentQuestionId)
+      player.answers.length > currentQuestionIndex
     ).length;
     setAnsweredCount(answered);
 
-    console.log('HostLeaderboard: Updated stats -', {
-      totalPlayers: players.length,
-      answeredCount: answered,
-      topPlayer: sorted[0]?.name,
-      topScore: sorted[0]?.score
+    console.log('HostLeaderboard: Answer tracking:', {
+      currentQuestionIndex,
+      totalAnsweredPlayers: answered,
+      playersWithAnswers: players.map(p => ({
+        name: p.name,
+        answersCount: p.answers.length,
+        hasAnsweredCurrent: p.answers.length > currentQuestionIndex
+      }))
     });
   }, [players, currentQuestionIndex]);
 
@@ -72,32 +85,41 @@ export function HostLeaderboard({ players, currentQuestionIndex, totalQuestions,
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {sortedPlayers.slice(0, 10).map((player, index) => (
-            <div
-              key={player.id}
-              className={`rounded-lg p-4 border transition-all duration-300 ${getPositionStyle(index)}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl font-bold w-8">
-                    {getPositionIcon(index)}
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-lg text-white">{player.name}</h3>
-                    <p className="text-white/70 text-sm">
-                      {player.answers.length} questions answered
-                    </p>
+          {sortedPlayers.slice(0, 10).map((player, index) => {
+            const hasAnsweredCurrent = player.answers.length > currentQuestionIndex;
+            
+            return (
+              <div
+                key={player.id}
+                className={`rounded-lg p-4 border transition-all duration-300 ${getPositionStyle(index)} ${
+                  hasAnsweredCurrent ? 'ring-2 ring-green-500/30' : ''
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold w-8">
+                      {getPositionIcon(index)}
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                        {player.name}
+                        {hasAnsweredCurrent && <span className="text-green-400 text-sm">✓</span>}
+                      </h3>
+                      <p className="text-white/70 text-sm">
+                        {player.answers.length} questions answered
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-white">
-                    {player.score.toLocaleString()}
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-white">
+                      {player.score.toLocaleString()}
+                    </div>
+                    <div className="text-white/60 text-sm">points</div>
                   </div>
-                  <div className="text-white/60 text-sm">points</div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           
           {players.length === 0 && (
             <div className="text-center py-8">

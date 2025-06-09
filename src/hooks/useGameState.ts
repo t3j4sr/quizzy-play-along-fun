@@ -52,7 +52,8 @@ export function useGameState(options: UseGameStateOptions = {}) {
           currentQuestionIndex: game.currentQuestionIndex,
           playerCount: game.players.length, 
           currentPlayer: currentPlayer?.name,
-          playerScore: currentPlayer?.score
+          playerScore: currentPlayer?.score,
+          playerAnswers: currentPlayer?.answers.length
         });
 
         setState(prev => ({
@@ -118,7 +119,7 @@ export function useGameState(options: UseGameStateOptions = {}) {
         error: null
       }));
 
-      // Set up Supabase real-time subscription with more aggressive refresh
+      // Set up Supabase real-time subscription with aggressive refresh
       channelRef.current = supabase
         .channel(`game_realtime_${gamePin}_${Date.now()}`)
         .on(
@@ -131,8 +132,10 @@ export function useGameState(options: UseGameStateOptions = {}) {
           },
           async (payload) => {
             console.log('useGameState: Supabase real-time update:', payload.eventType);
-            // Immediate refresh on database changes
-            setTimeout(() => refreshGameData(), 100);
+            // Multiple refreshes to ensure data sync
+            setTimeout(() => refreshGameData(), 50);
+            setTimeout(() => refreshGameData(), 200);
+            setTimeout(() => refreshGameData(), 500);
           }
         )
         .subscribe((status) => {
@@ -142,8 +145,9 @@ export function useGameState(options: UseGameStateOptions = {}) {
       // Subscribe to localStorage events for same-device updates
       const unsubscribe = realtimeManager.subscribe(gamePin, async (event) => {
         console.log('useGameState: RealtimeManager event:', event.type);
-        // Immediate refresh on real-time events
-        setTimeout(() => refreshGameData(), 100);
+        // Multiple refreshes for critical events
+        setTimeout(() => refreshGameData(), 50);
+        setTimeout(() => refreshGameData(), 200);
 
         // Show notifications for players
         if (playerId) {
@@ -163,6 +167,8 @@ export function useGameState(options: UseGameStateOptions = {}) {
               if (event.payload.playerId !== playerId) {
                 toast({ title: 'Another player answered!' });
               }
+              // Force refresh when any answer is submitted
+              setTimeout(() => refreshGameData(), 100);
               break;
           }
         }
@@ -267,10 +273,11 @@ export function useGameState(options: UseGameStateOptions = {}) {
         console.log('useGameState: Answer submitted successfully');
         toast({ title: 'Answer submitted!' });
         
-        // Force immediate refresh to update score and state
-        setTimeout(() => {
-          refreshGameData();
-        }, 100);
+        // Multiple aggressive refreshes to ensure score updates
+        setTimeout(() => refreshGameData(), 50);
+        setTimeout(() => refreshGameData(), 200);
+        setTimeout(() => refreshGameData(), 500);
+        setTimeout(() => refreshGameData(), 1000);
         
         return true;
       } else {

@@ -25,6 +25,17 @@ export function EnhancedLeaderboard({
   const [averageScore, setAverageScore] = useState(0);
 
   useEffect(() => {
+    console.log('EnhancedLeaderboard: Players updated:', {
+      playerCount: players.length,
+      currentQuestionIndex,
+      playersData: players.map(p => ({
+        name: p.name,
+        score: p.score,
+        answersCount: p.answers.length,
+        answers: p.answers
+      }))
+    });
+
     // Sort players by score, then by answer speed
     const sorted = [...players].sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
@@ -39,12 +50,22 @@ export function EnhancedLeaderboard({
     });
     setSortedPlayers(sorted);
 
-    // Count answered players for current question
-    const currentQuestionId = `question_${currentQuestionIndex}`;
+    // Count answered players - check if they have answered more questions than the current index
+    // This means they have answered the current question
     const answered = players.filter(player => 
-      player.answers.some(answer => answer.questionId === currentQuestionId)
+      player.answers.length > currentQuestionIndex
     ).length;
     setAnsweredCount(answered);
+
+    console.log('EnhancedLeaderboard: Answer tracking:', {
+      currentQuestionIndex,
+      totalAnsweredPlayers: answered,
+      playersWithAnswers: players.map(p => ({
+        name: p.name,
+        answersCount: p.answers.length,
+        hasAnsweredCurrent: p.answers.length > currentQuestionIndex
+      }))
+    });
 
     // Calculate average score
     const avgScore = players.length > 0 
@@ -108,10 +129,14 @@ export function EnhancedLeaderboard({
         <div className="grid gap-2 max-h-96 overflow-y-auto pr-2">
           {sortedPlayers.slice(0, 12).map((player, index) => {
             const stats = getPlayerStats(player);
+            const hasAnsweredCurrent = player.answers.length > currentQuestionIndex;
+            
             return (
               <div
                 key={player.id}
-                className={`rounded-xl p-4 border transition-all duration-300 hover:scale-[1.01] ${getPositionStyle(index)}`}
+                className={`rounded-xl p-4 border transition-all duration-300 hover:scale-[1.01] ${getPositionStyle(index)} ${
+                  hasAnsweredCurrent ? 'ring-2 ring-green-500/30' : ''
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -121,8 +146,9 @@ export function EnhancedLeaderboard({
                       </span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-lg text-white truncate">
+                      <h3 className="font-bold text-lg text-white truncate flex items-center gap-2">
                         {player.name}
+                        {hasAnsweredCurrent && <span className="text-green-400 text-sm">✓</span>}
                       </h3>
                       <div className="flex items-center gap-4 text-sm text-white/80">
                         <span className="flex items-center gap-1">
