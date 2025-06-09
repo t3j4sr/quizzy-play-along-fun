@@ -1,138 +1,94 @@
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Users, Clock, Zap, Sparkles, RefreshCw } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { Users, Play, RefreshCw, Clock } from 'lucide-react';
 import { useGameState } from '@/hooks/useGameState';
+import { toast } from '@/hooks/use-toast';
 
 const JoinGame = () => {
-  const { pin } = useParams();
   const navigate = useNavigate();
+  const [pin, setPin] = useState('');
   const [playerName, setPlayerName] = useState('');
-  const [currentPlayer, setCurrentPlayer] = useState(null);
-  
-  const { game, connect, joinGame, isConnected, error, refreshGameData } = useGameState({ 
-    pin,
-    playerId: currentPlayer?.id,
-    autoConnect: true 
+  const [isJoining, setIsJoining] = useState(false);
+  const [showWaiting, setShowWaiting] = useState(false);
+  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+
+  const { game, joinGame, isConnected, refreshGameData } = useGameState({
+    pin: showWaiting ? pin : undefined,
+    playerId: currentPlayerId || undefined,
+    autoConnect: false
   });
 
-  // Manual refresh function
+  // Auto-refresh when waiting
+  useEffect(() => {
+    if (showWaiting && pin) {
+      const interval = setInterval(() => {
+        refreshGameData();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [showWaiting, pin, refreshGameData]);
+
+  // Check if game starts
+  useEffect(() => {
+    if (game?.status === 'playing' && currentPlayerId) {
+      navigate(`/play?pin=${pin}&playerId=${currentPlayerId}`);
+    }
+  }, [game?.status, currentPlayerId, pin, navigate]);
+
   const handleManualRefresh = () => {
-    console.log('JoinGame: Manual refresh triggered');
     if (pin) {
       refreshGameData();
-      toast({ title: 'Refreshing game...' });
+      toast({ title: 'Game refreshed!' });
     }
   };
 
-  // Auto-refresh every 2 seconds for better connectivity
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (pin && isConnected) {
-        refreshGameData();
+  const handleJoinGame = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!pin.trim() || !playerName.trim()) {
+      toast({ title: 'Please enter both PIN and name', variant: 'destructive' });
+      return;
+    }
+
+    setIsJoining(true);
+    
+    try {
+      const player = await joinGame(pin.trim(), playerName.trim());
+      if (player) {
+        setCurrentPlayerId(player.id);
+        setShowWaiting(true);
+        toast({ title: `Welcome to Quizora, ${playerName}!` });
       }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [pin, refreshGameData, isConnected]);
-
-  useEffect(() => {
-    if (error) {
-      toast({ title: error, variant: "destructive" });
-    }
-  }, [error]);
-
-  // Auto-redirect when game starts
-  useEffect(() => {
-    if (game && game.status === 'playing' && currentPlayer) {
-      navigate(`/play/game?pin=${pin}&playerId=${currentPlayer.id}`);
-    }
-  }, [game, currentPlayer, navigate, pin]);
-
-  const handleJoinGame = async () => {
-    if (!playerName.trim()) {
-      toast({ title: "Please enter your name", variant: "destructive" });
-      return;
-    }
-
-    if (!pin) {
-      toast({ title: "Invalid game PIN", variant: "destructive" });
-      return;
-    }
-
-    const player = await joinGame(pin, playerName.trim());
-    if (player) {
-      setCurrentPlayer(player);
+    } catch (error) {
+      toast({ title: 'Failed to join game', variant: 'destructive' });
+    } finally {
+      setIsJoining(false);
     }
   };
 
-  if (!isConnected && !error) {
+  if (showWaiting && game) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
-        <Card className="w-full max-w-md bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
-          <CardContent className="text-center py-12">
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-20 h-20 border-4 border-white/30 rounded-full animate-spin border-t-white"></div>
-              </div>
-              <Sparkles className="w-8 h-8 text-white mx-auto animate-pulse" />
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-2 sm:px-4">
+        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
+          <CardContent className="text-center py-8 sm:py-12 space-y-4 sm:space-y-6">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto border border-white/30">
+              <Clock className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Connecting to Game</h2>
-            <p className="text-white/80 mb-4">Finding your quiz room...</p>
-            <Button
-              onClick={handleManualRefresh}
-              variant="outline"
-              className="bg-black/30 border-white/30 text-white hover:bg-white/20"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh Game
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (currentPlayer && game) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
-        <Card className="w-full max-w-md bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl animate-scale-in">
-          <CardHeader className="text-center">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-20 h-20 bg-gradient-to-r from-white to-gray-200 rounded-full flex items-center justify-center mx-auto shadow-lg">
-                <Users className="h-10 w-10 text-black" />
-              </div>
-              <Button
-                onClick={handleManualRefresh}
-                variant="outline"
-                size="sm"
-                className="bg-black/30 border-white/30 text-white hover:bg-white/20"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">Waiting for host to start...</h2>
+            <p className="text-white/70 text-sm sm:text-base">
+              {playerName}, you're ready to play Quizora!
+            </p>
+            <div className="bg-white/10 rounded-lg p-3 sm:p-4 border border-white/20">
+              <p className="text-white/80 text-sm sm:text-base">
+                Game PIN: <span className="font-bold text-lg sm:text-xl">{game.pin}</span>
+              </p>
+              <p className="text-white/60 text-xs sm:text-sm mt-2">{game.players.length} players joined</p>
             </div>
-            <CardTitle className="text-3xl text-white mb-2">You're In!</CardTitle>
-            <div className="bg-black/30 rounded-lg p-3 border border-white/20">
-              <p className="text-xl font-bold text-white">{currentPlayer.name}</p>
-              <p className="text-white/80">Game PIN: {pin}</p>
-            </div>
-          </CardHeader>
-          <CardContent className="text-center space-y-6">
-            <div className="bg-black/30 rounded-xl p-6 border border-white/20">
-              <div className="flex items-center justify-center gap-3 mb-3">
-                <Clock className="h-6 w-6 text-white/80" />
-                <span className="text-white font-semibold">Waiting for host to start...</span>
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <Users className="h-5 w-5 text-white/60" />
-                <span className="text-white/80">{game.players.length} players joined</span>
-              </div>
-            </div>
-
+            
             <div className="space-y-4">
               <div className="flex justify-center">
                 <div className="flex space-x-2">
@@ -142,14 +98,6 @@ const JoinGame = () => {
                 </div>
               </div>
               
-              <div className="bg-gradient-to-r from-white/20 to-gray-300/20 rounded-lg p-4 border border-white/30">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Zap className="h-5 w-5 text-white" />
-                  <span className="text-white font-medium">Ready to Play!</span>
-                </div>
-                <p className="text-sm text-white/70">The game will start automatically when the host begins</p>
-              </div>
-
               <Button
                 onClick={handleManualRefresh}
                 variant="outline"
@@ -166,74 +114,59 @@ const JoinGame = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-4">
-      <Card className="w-full max-w-md bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl animate-fade-in">
-        <CardHeader className="text-center">
-          <div className="w-20 h-20 bg-gradient-to-r from-white to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-            <User className="h-10 w-10 text-black" />
-          </div>
-          <CardTitle className="text-3xl font-bold text-white mb-2">Join the Game</CardTitle>
-          <div className="bg-black/30 rounded-lg p-4 border border-white/30">
-            <p className="text-white/80 text-sm mb-1">Game PIN</p>
-            <p className="font-bold text-3xl text-white tracking-wider">{pin}</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-2 sm:px-4">
+      <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
+        <CardHeader>
+          <CardTitle className="text-center text-white">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Users className="h-6 w-6 sm:h-8 sm:w-8" />
+              <span className="text-xl sm:text-2xl">Join Quizora</span>
+            </div>
+            <p className="text-sm sm:text-base text-white/70 font-normal">
+              Enter the game PIN and your name to join
+            </p>
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-white/80 text-sm font-medium">Your Name</label>
-            <Input
-              type="text"
-              placeholder="Enter your name"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              className="text-center text-xl h-14 bg-black/30 border-white/30 text-white placeholder-white/50 focus:border-white/50 focus:bg-black/40"
-              maxLength={20}
-              onKeyPress={(e) => e.key === 'Enter' && handleJoinGame()}
-            />
-          </div>
-          
-          <Button 
-            onClick={handleJoinGame}
-            className="w-full h-14 text-lg font-bold bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black shadow-lg hover:shadow-xl transition-all duration-300 border-0"
-            disabled={!playerName.trim()}
-          >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Join Game
-          </Button>
-
-          {game && (
-            <div className="text-center bg-black/30 rounded-lg p-4 border border-white/20">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Users className="h-5 w-5 text-white/60" />
-                <span className="text-white/80 font-medium">
-                  {game.players.length} players ready
-                </span>
-              </div>
-              {game.players.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-2 mt-3">
-                  {game.players.slice(0, 3).map((player) => (
-                    <span key={player.id} className="bg-white/20 px-3 py-1 rounded-full text-sm text-white border border-white/30">
-                      {player.name}
-                    </span>
-                  ))}
-                  {game.players.length > 3 && (
-                    <span className="bg-white/20 px-3 py-1 rounded-full text-sm text-white border border-white/30">
-                      +{game.players.length - 3} more
-                    </span>
-                  )}
+        <CardContent>
+          <form onSubmit={handleJoinGame} className="space-y-4 sm:space-y-6">
+            <div>
+              <Input
+                type="text"
+                placeholder="Enter Game PIN"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="text-center text-xl sm:text-2xl font-bold tracking-wider bg-white/10 border-white/30 text-white placeholder:text-white/50 h-12 sm:h-14"
+                maxLength={6}
+              />
+            </div>
+            <div>
+              <Input
+                type="text"
+                placeholder="Your Name"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value.slice(0, 20))}
+                className="bg-white/10 border-white/30 text-white placeholder:text-white/50 h-10 sm:h-12"
+                maxLength={20}
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={isJoining || !pin.trim() || !playerName.trim()}
+              className="w-full bg-gradient-to-r from-white to-gray-200 hover:from-gray-100 hover:to-white text-black font-bold h-12 sm:h-14 text-base sm:text-lg"
+            >
+              {isJoining ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent"></div>
+                  Joining...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Play className="h-4 w-4 sm:h-5 sm:w-5" />
+                  Join Game
                 </div>
               )}
-            </div>
-          )}
-
-          <Button
-            onClick={handleManualRefresh}
-            variant="outline"
-            className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh Game
-          </Button>
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

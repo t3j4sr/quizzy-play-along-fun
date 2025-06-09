@@ -1,14 +1,14 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Users, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Copy, Users, ArrowLeft, RefreshCw, Image } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useGameState } from '@/hooks/useGameState';
-import { HostLeaderboard } from '@/components/HostLeaderboard';
+import { EnhancedLeaderboard } from '@/components/EnhancedLeaderboard';
 import { HostGameControl } from '@/components/HostGameControl';
+import { QuestionPhotoUpload } from '@/components/QuestionPhotoUpload';
 
 const HostGame = () => {
   const { quizId } = useParams();
@@ -17,6 +17,7 @@ const HostGame = () => {
   const [gamePin, setGamePin] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [questionPhotos, setQuestionPhotos] = useState<{[key: string]: string}>({});
 
   const { 
     game, 
@@ -158,10 +159,25 @@ const HostGame = () => {
     }
   };
 
+  const handleQuestionPhotoAdd = (questionId: string, photoUrl: string) => {
+    setQuestionPhotos(prev => ({
+      ...prev,
+      [questionId]: photoUrl
+    }));
+  };
+
+  const handleQuestionPhotoRemove = (questionId: string) => {
+    setQuestionPhotos(prev => {
+      const updated = { ...prev };
+      delete updated[questionId];
+      return updated;
+    });
+  };
+
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <div className="text-white text-xl">Setting up your game...</div>
+        <div className="text-white text-xl">Setting up your Quizora game...</div>
       </div>
     );
   }
@@ -169,29 +185,31 @@ const HostGame = () => {
   if (!game || !quiz || !gamePin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center">
-        <div className="text-white text-xl">Loading game session...</div>
+        <div className="text-white text-xl">Loading Quizora session...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-2 sm:p-4">
       <div className="container mx-auto max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <Button 
             variant="ghost" 
             onClick={() => navigate('/')}
-            className="text-white hover:bg-white/20 border border-white/20"
+            className="text-white hover:bg-white/20 border border-white/20 order-2 sm:order-1"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Home
           </Button>
-          <h1 className="text-3xl font-bold text-white">{quiz.title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white text-center order-1 sm:order-2">
+            Quizora - {quiz.title}
+          </h1>
           <Button 
             onClick={handleRefresh}
             variant="outline"
-            className="bg-black/30 border-white/30 text-white hover:bg-white/20"
+            className="bg-black/30 border-white/30 text-white hover:bg-white/20 order-3"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
@@ -199,12 +217,12 @@ const HostGame = () => {
         </div>
 
         {/* Game PIN */}
-        <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl mb-8">
-          <CardContent className="py-8">
+        <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl mb-6 sm:mb-8">
+          <CardContent className="py-6 sm:py-8">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-4">Game PIN</h2>
-              <div className="flex items-center justify-center gap-4">
-                <span className="text-6xl font-bold text-white tracking-wider">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Game PIN</h2>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <span className="text-4xl sm:text-6xl font-bold text-white tracking-wider">
                   {gamePin}
                 </span>
                 <Button
@@ -215,30 +233,30 @@ const HostGame = () => {
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-white/70 mt-4">
-                Players can join at your quiz website with this PIN
+              <p className="text-white/70 mt-4 text-sm sm:text-base">
+                Players can join at your Quizora website with this PIN
               </p>
             </div>
           </CardContent>
         </Card>
 
         {/* Game Status */}
-        <div className="grid lg:grid-cols-3 gap-8 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8">
           <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
+              <CardTitle className="flex items-center gap-2 text-white text-base sm:text-lg">
                 <Users className="h-5 w-5" />
                 Players ({game.players.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">
+              <div className="text-2xl sm:text-3xl font-bold text-white mb-2">
                 {game.players.length}
               </div>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
+              <div className="space-y-2 max-h-24 sm:max-h-32 overflow-y-auto">
                 {game.players.length > 0 ? (
                   game.players.map(player => (
-                    <div key={player.id} className="text-white/70 text-sm bg-white/10 px-2 py-1 rounded">
+                    <div key={player.id} className="text-white/70 text-xs sm:text-sm bg-white/10 px-2 py-1 rounded">
                       {player.name} ({player.score} pts)
                     </div>
                   ))
@@ -251,11 +269,11 @@ const HostGame = () => {
 
           <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
             <CardHeader>
-              <CardTitle className="text-white">Game Status</CardTitle>
+              <CardTitle className="text-white text-base sm:text-lg">Game Status</CardTitle>
             </CardHeader>
             <CardContent>
               <Badge 
-                className={`text-lg px-4 py-2 ${
+                className={`text-sm sm:text-lg px-3 sm:px-4 py-2 ${
                   game.status === 'waiting' 
                     ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                     : game.status === 'playing'
@@ -281,10 +299,10 @@ const HostGame = () => {
 
           <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
             <CardHeader>
-              <CardTitle className="text-white">Quiz Info</CardTitle>
+              <CardTitle className="text-white text-base sm:text-lg">Quiz Info</CardTitle>
             </CardHeader>
             <CardContent className="text-white/70">
-              <div className="space-y-2">
+              <div className="space-y-2 text-sm sm:text-base">
                 <div>Questions: {quiz.questions.length}</div>
                 {isGameActive && currentQuestion && (
                   <div>Current: Question {(game.currentQuestionIndex || 0) + 1}</div>
@@ -296,8 +314,8 @@ const HostGame = () => {
 
         {/* Game Controls and Leaderboard */}
         {isGameActive && currentQuestion && (
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8">
+            <div className="space-y-4 sm:space-y-6">
               <HostGameControl
                 gamePin={gamePin}
                 currentQuestionIndex={game.currentQuestionIndex || 0}
@@ -310,17 +328,27 @@ const HostGame = () => {
               
               <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
                 <CardHeader>
-                  <CardTitle className="text-white">Current Question</CardTitle>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <span>Current Question</span>
+                    <Image className="h-5 w-5 text-white/60" />
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <h3 className="text-xl font-bold text-white mb-4">
+                <CardContent className="space-y-4">
+                  {/* Question Photo Upload */}
+                  <QuestionPhotoUpload
+                    onPhotoAdd={(url) => handleQuestionPhotoAdd(currentQuestion.id, url)}
+                    currentPhoto={questionPhotos[currentQuestion.id]}
+                    onPhotoRemove={() => handleQuestionPhotoRemove(currentQuestion.id)}
+                  />
+                  
+                  <h3 className="text-lg sm:text-xl font-bold text-white">
                     {currentQuestion.question}
                   </h3>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {currentQuestion.answers.map((answer, index) => (
                       <div
                         key={answer.id}
-                        className={`p-3 rounded-lg border ${
+                        className={`p-2 sm:p-3 rounded-lg border text-sm sm:text-base ${
                           showAnswers && answer.isCorrect
                             ? 'bg-green-500/20 border-green-500/30 text-green-400'
                             : 'bg-white/10 border-white/20 text-white/70'
@@ -334,11 +362,12 @@ const HostGame = () => {
               </Card>
             </div>
 
-            <HostLeaderboard
+            <EnhancedLeaderboard
               players={game.players}
               currentQuestionIndex={game.currentQuestionIndex || 0}
               totalQuestions={quiz.questions.length}
               timeLeft={timeLeft}
+              showDetailedStats={true}
             />
           </div>
         )}
@@ -347,14 +376,15 @@ const HostGame = () => {
         {isGameFinished && (
           <Card className="bg-black/50 backdrop-blur-xl border border-white/20 shadow-2xl">
             <CardHeader>
-              <CardTitle className="text-white">Final Results</CardTitle>
+              <CardTitle className="text-white text-xl sm:text-2xl">Final Results</CardTitle>
             </CardHeader>
             <CardContent>
-              <HostLeaderboard
+              <EnhancedLeaderboard
                 players={game.players}
                 currentQuestionIndex={game.currentQuestionIndex || 0}
                 totalQuestions={quiz.questions.length}
                 timeLeft={0}
+                showDetailedStats={true}
               />
             </CardContent>
           </Card>
