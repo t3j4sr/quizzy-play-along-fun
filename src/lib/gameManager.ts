@@ -1,3 +1,4 @@
+
 import { realtimeManager } from './realtimeManager';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -376,33 +377,35 @@ class GameManager {
     }
 
     const player = game.players.find(p => p.id === playerId);
-    const question = quiz.questions.find(q => q.id === questionId);
+    // Use the current question from the game state instead of relying on questionId
+    const currentQuestion = quiz.questions[game.currentQuestionIndex];
     
-    if (!player || !question) {
-      console.error('GameManager: Player or question not found');
+    if (!player || !currentQuestion) {
+      console.error('GameManager: Player or current question not found');
       return false;
     }
 
-    // Check if player already answered this question
-    if (player.answers.some(a => a.questionId === questionId)) {
+    // Check if player already answered the current question using the actual question ID
+    if (player.answers.some(a => a.questionId === currentQuestion.id)) {
       console.error('GameManager: Player already answered this question');
       return false;
     }
 
-    const answer = question.answers.find(a => a.id === answerId);
+    const answer = currentQuestion.answers.find(a => a.id === answerId);
     const isCorrect = answer?.isCorrect || false;
 
     // Calculate points based on time and correctness (like Kahoot)
     let points = 0;
     if (isCorrect) {
-      const basePoints = question.points || 1000;
-      const timeRatio = Math.max(0, (question.timeLimit - timeSpent) / question.timeLimit);
+      const basePoints = currentQuestion.points || 1000;
+      const timeRatio = Math.max(0, (currentQuestion.timeLimit - timeSpent) / currentQuestion.timeLimit);
       const timeBonus = Math.floor(basePoints * 0.5 * timeRatio);
       points = Math.floor(basePoints * 0.5) + timeBonus;
     }
 
+    // Use the actual question ID from the current question
     player.answers.push({
-      questionId,
+      questionId: currentQuestion.id,
       answerId,
       timeSpent,
       isCorrect
@@ -410,7 +413,13 @@ class GameManager {
 
     player.score += points;
 
-    console.log('GameManager: Answer processed:', { isCorrect, points, newScore: player.score });
+    console.log('GameManager: Answer processed:', { 
+      isCorrect, 
+      points, 
+      newScore: player.score,
+      questionId: currentQuestion.id,
+      currentQuestionIndex: game.currentQuestionIndex
+    });
 
     // Update in Supabase with retry logic
     const maxRetries = 3;

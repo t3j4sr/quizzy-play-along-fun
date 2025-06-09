@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ const PlayGame = () => {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [pointsEarned, setPointsEarned] = useState(0);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
 
   const { 
     game, 
@@ -46,18 +48,18 @@ const PlayGame = () => {
     }
   };
 
-  // Auto-refresh every 1 second for better real-time feel
+  // Auto-refresh every 2 seconds for better real-time feel
   useEffect(() => {
     const interval = setInterval(() => {
       if (pin && isConnected) {
         refreshGameData();
       }
-    }, 1000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [pin, refreshGameData, isConnected]);
 
-  // Handle game status changes
+  // Handle game status changes and question changes
   useEffect(() => {
     console.log('PlayGame: Game status update:', { 
       status: game?.status, 
@@ -65,18 +67,22 @@ const PlayGame = () => {
       currentQuestionIndex: game?.currentQuestionIndex,
       playerName: currentPlayer?.name,
       isConnected,
-      hasCurrentQuestion: !!currentQuestion
+      hasCurrentQuestion: !!currentQuestion,
+      currentQuestionId: currentQuestion?.id,
+      previousQuestionId: currentQuestionId
     });
 
-    // Reset answer state when question changes
-    if (isGameActive && currentQuestion) {
+    // Reset answer state when question changes (compare actual question IDs)
+    if (isGameActive && currentQuestion && currentQuestion.id !== currentQuestionId) {
+      console.log('PlayGame: New question detected, resetting state');
       setIsAnswered(false);
       setSelectedAnswer(null);
       setPointsEarned(0);
       setTimeLeft(currentQuestion.timeLimit);
+      setCurrentQuestionId(currentQuestion.id);
       console.log('PlayGame: New question loaded:', currentQuestion.question);
     }
-  }, [game?.status, game?.currentQuestionIndex, isGameActive, currentQuestion, currentPlayer, isConnected]);
+  }, [game?.status, game?.currentQuestionIndex, isGameActive, currentQuestion, currentPlayer, isConnected, currentQuestionId]);
 
   // Handle timer countdown
   useEffect(() => {
@@ -100,12 +106,18 @@ const PlayGame = () => {
   const handleAnswerSubmit = async (answerId: string | null) => {
     if (isAnswered || !currentQuestion || !currentPlayer || !game) return;
     
-    console.log('PlayGame: Submitting answer:', { answerId, timeSpent: currentQuestion.timeLimit - timeLeft });
+    console.log('PlayGame: Submitting answer:', { 
+      questionId: currentQuestion.id, 
+      answerId, 
+      timeSpent: currentQuestion.timeLimit - timeLeft,
+      currentQuestionIndex: game.currentQuestionIndex
+    });
     
     setSelectedAnswer(answerId);
     setIsAnswered(true);
     
     const timeSpent = currentQuestion.timeLimit - timeLeft;
+    // Use the actual question ID from the current question
     const success = await submitAnswer(currentQuestion.id, answerId || '', timeSpent);
     
     if (success && answerId) {
@@ -116,11 +128,16 @@ const PlayGame = () => {
         const timeBonus = Math.floor(basePoints * (timeLeft / currentQuestion.timeLimit));
         const totalPoints = basePoints + timeBonus;
         setPointsEarned(totalPoints);
+        console.log('PlayGame: Points calculated:', { basePoints, timeBonus, totalPoints });
       }
     }
 
     if (!success) {
+      console.error('PlayGame: Failed to submit answer');
       toast({ title: 'Failed to submit answer', variant: 'destructive' });
+      // Reset answer state on failure to allow retry
+      setIsAnswered(false);
+      setSelectedAnswer(null);
     }
   };
 
@@ -315,66 +332,6 @@ const PlayGame = () => {
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh Results
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error && !game) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-2 sm:px-4">
-        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
-          <CardContent className="text-center py-8 sm:py-12">
-            <h2 className="text-2xl font-bold text-white mb-4">Connection Error</h2>
-            <p className="text-white/70 mb-6">{error}</p>
-            <div className="space-y-3">
-              <Button 
-                onClick={handleManualRefresh}
-                className="w-full bg-white text-black"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh Game
-              </Button>
-              <Button 
-                onClick={() => navigate('/')} 
-                variant="outline"
-                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
-              >
-                Back to Home
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Game not found
-  if (!game || !currentPlayer) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center px-2 sm:px-4">
-        <Card className="w-full max-w-md bg-black/50 backdrop-blur-sm shadow-2xl border border-white/20">
-          <CardContent className="text-center py-8 sm:py-12">
-            <h2 className="text-2xl font-bold text-white mb-4">Game Not Found</h2>
-            <p className="text-white/70 mb-6">Could not connect to the game</p>
-            <div className="space-y-3">
-              <Button 
-                onClick={handleManualRefresh}
-                className="w-full bg-white text-black"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh Game
-              </Button>
-              <Button 
-                onClick={() => navigate('/')} 
-                variant="outline"
-                className="w-full bg-black/30 border-white/30 text-white hover:bg-white/20"
-              >
-                Back to Home
               </Button>
             </div>
           </CardContent>
