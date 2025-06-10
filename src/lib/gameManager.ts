@@ -37,6 +37,7 @@ export interface Question {
   answers: Answer[];
   timeLimit: number;
   points: number;
+  imageUrl?: string;
 }
 
 export interface Answer {
