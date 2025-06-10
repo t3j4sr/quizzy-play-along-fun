@@ -45,6 +45,17 @@ const HostGame = () => {
     }
   }, [timeLeft]);
 
+  // Auto-refresh for better real-time sync
+  useEffect(() => {
+    if (!gamePin || !isConnected) return;
+
+    const interval = setInterval(() => {
+      refreshGameData();
+    }, 1000); // Refresh every second for better real-time feel
+
+    return () => clearInterval(interval);
+  }, [gamePin, isConnected, refreshGameData]);
+
   // Initialize game session
   useEffect(() => {
     const initializeGame = async () => {
@@ -337,13 +348,25 @@ const HostGame = () => {
                   {/* Question Photo Upload */}
                   <QuestionPhotoUpload
                     onPhotoAdd={(url) => handleQuestionPhotoAdd(currentQuestion.id, url)}
-                    currentPhoto={questionPhotos[currentQuestion.id]}
+                    currentPhoto={questionPhotos[currentQuestion.id] || currentQuestion.imageUrl}
                     onPhotoRemove={() => handleQuestionPhotoRemove(currentQuestion.id)}
                   />
                   
                   <h3 className="text-lg sm:text-xl font-bold text-white">
                     {currentQuestion.question}
                   </h3>
+
+                  {/* Display question image if available */}
+                  {(questionPhotos[currentQuestion.id] || currentQuestion.imageUrl) && (
+                    <div className="rounded-lg overflow-hidden">
+                      <img 
+                        src={questionPhotos[currentQuestion.id] || currentQuestion.imageUrl} 
+                        alt="Question visual" 
+                        className="w-full h-48 object-cover"
+                      />
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {currentQuestion.answers.map((answer, index) => (
                       <div

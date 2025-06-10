@@ -12,7 +12,16 @@ const Index = () => {
       {/* Hero Section */}
       <div className="container mx-auto px-4 py-8 sm:py-16">
         <div className="text-center mb-8 sm:mb-16">
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold text-white mb-4 sm:mb-6">
+          {/* Logo */}
+          <div className="mb-6 sm:mb-8">
+            <img 
+              src="/lovable-uploads/3d299da4-928e-4dc1-aaa6-8b10ad4a3467.png" 
+              alt="Quizora Logo" 
+              className="w-32 h-32 sm:w-48 sm:h-48 lg:w-56 lg:h-56 mx-auto object-contain"
+            />
+          </div>
+          
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 sm:mb-6">
             <span className="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
               Quizora
             </span>

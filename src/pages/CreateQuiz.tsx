@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, ArrowLeft, Save, Clock, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Save, Clock, HelpCircle, Image } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { QuestionImageUpload } from '@/components/QuestionImageUpload';
 
 interface Answer {
   id: string;
@@ -20,6 +21,7 @@ interface Question {
   question: string;
   answers: Answer[];
   timeLimit: number;
+  imageUrl?: string;
 }
 
 interface Quiz {
@@ -119,6 +121,20 @@ const CreateQuiz = () => {
     }));
   };
 
+  const handleImageAdd = (imageUrl: string) => {
+    setCurrentQuestion(prev => ({
+      ...prev,
+      imageUrl
+    }));
+  };
+
+  const handleImageRemove = () => {
+    setCurrentQuestion(prev => ({
+      ...prev,
+      imageUrl: undefined
+    }));
+  };
+
   const saveQuiz = () => {
     if (!quiz.title.trim()) {
       toast({ title: "Please enter a quiz title", variant: "destructive" });
@@ -202,9 +218,17 @@ const CreateQuiz = () => {
                   <div className="max-h-48 overflow-y-auto space-y-3">
                     {quiz.questions.map((question, index) => (
                       <div key={question.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border-l-4 border-black shadow-sm">
-                        <span className="text-sm font-medium text-black truncate flex-1">
-                          {index + 1}. {question.question}
-                        </span>
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-black truncate block">
+                            {index + 1}. {question.question}
+                          </span>
+                          {question.imageUrl && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Image className="h-3 w-3 text-gray-500" />
+                              <span className="text-xs text-gray-500">Has image</span>
+                            </div>
+                          )}
+                        </div>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -246,6 +270,19 @@ const CreateQuiz = () => {
                     placeholder="Enter your question here..."
                     className="text-lg border-2 border-gray-200 focus:border-black transition-colors shadow-sm resize-none"
                     rows={2}
+                  />
+                </div>
+
+                {/* Image Upload Section */}
+                <div className="space-y-2">
+                  <Label className="text-black font-semibold flex items-center gap-2">
+                    <Image className="h-4 w-4" />
+                    Question Image (Optional)
+                  </Label>
+                  <QuestionImageUpload
+                    onImageAdd={handleImageAdd}
+                    currentImage={currentQuestion.imageUrl}
+                    onImageRemove={handleImageRemove}
                   />
                 </div>
 
